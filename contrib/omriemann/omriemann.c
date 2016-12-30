@@ -19,6 +19,7 @@ DEFobjCurrIf(errmsg)
 #define OMRIEMANN_FIELD_HOST 0
 #define OMRIEMANN_FIELD_SERVICE 1
 #define OMRIEMANN_FIELD_METRIC 2
+#define FIELD_COUNT 13
 
 typedef struct _instanceData {
   uchar *server;
@@ -42,11 +43,6 @@ typedef struct wrkrInstanceData {
 	riemann_client_t *client; 
   int count;
 } wrkrInstanceData_t;
-
-typedef struct eventlist {
-  void **fields;
-  struct eventlist *next;
-} eventlist_t;
 
 static pthread_mutex_t mutDoAct = PTHREAD_MUTEX_INITIALIZER;
 
@@ -122,18 +118,32 @@ rsRetVal ensureRiemannConnectionIsOpen(wrkrInstanceData_t *pWrkrData)
     RETiRet;
 }
 
+/*********************************************************
+ *
+ * The eventlist is our internal datastructure.
+ * For each event, we store an array of FIELD_COUNT void pointers.
+ * We use the riemann_event_field_t enum as an index into
+ *   the array.
+ *
+ * For some messages, eg impstats, we will generate a set of
+ * events, so we can treat events as a linked list.
+ *
+ * ********************************************************/
+
+typedef struct eventlist {
+  void **fields;
+  struct eventlist *next;
+} eventlist_t;
+
 static eventlist_t*
-eventlist_new(eventlist_t *tail) {
-   eventlist_t * result;
-   void ** fields;
+eventlist_new() {
+   eventlist_t *result;
+   void * fields;
 
-   fields = calloc(16, sizeof(void *));
-   result = calloc(1, sizeof(eventlist_t *));
-
+   result = malloc(sizeof(eventlist_t));
+   fields = calloc(FIELD_COUNT, sizeof(void *));
    result->fields = fields;
-   result->next = tail;
-
-   dbgprintf("made a new list\n");
+   result->next = NULL;
 
    return result;
 }
@@ -141,9 +151,17 @@ eventlist_new(eventlist_t *tail) {
 static void eventlist_free(eventlist_t *list)
 {
    eventlist_t *tmp;
+   int i;
 
    while (list != NULL)
    {
+
+     for(i =0; i< FIELD_COUNT; i++) {
+        if (list->fields[i] != NULL){
+           free(list->fields[i]);
+        }
+     }
+
       free(list->fields);
 
       tmp = list;
@@ -152,26 +170,45 @@ static void eventlist_free(eventlist_t *list)
    }
 }
 
-static void setField(void **event, smsg_t *msg,
+/*********************************************
+ *
+ * Various odds and sods for setting fields.
+ *
+ * *******************************************/
+
+
+/* We allow literals or property names in our config.
+ * This function sets a field with a string value to 
+ * either the literal value of the config key, or to 
+ * the value of the resolved msgPropDescr_t.
+ * 
+ * We always call this function so that we can apply 
+ * defaults to fields, which is why we check to make
+ * certain the field hasn't already been set.
+ * * */
+
+static void setFieldFromConfig(void **event, smsg_t *msg,
                 short unsigned isMandatory, riemann_event_field_t field, 
                 uchar *cfgValue, msgPropDescr_t *resolvedProperty) {
     
         uchar *propValue; 
-        short unsigned mustFree; 
+        short unsigned mustFree = 0; 
         rs_size_t propLen;
         propValue = NULL;
 
+        // already set? Nothing to do.
         if(NULL != event[field])
           return;
 
-        // if we have a reslved property for this field, then everything is simple.
+        // if we have a resolved property for this field, then everything is simple.
         if (NULL != resolvedProperty)
         {
            propValue = MsgGetProp(msg, NULL, resolvedProperty, &propLen, &mustFree, NULL);
            if( NULL != propValue)
               event[field] = strdup((char *)propValue);
-        } else if(isMandatory){
-          // if this field is mandatory, then we'll assume that the configured value is a literal
+
+        // if this field is mandatory, then we'll assume that the configured value is a literal
+        } else if(isMandatory) {
           event[field] = strdup((char *)cfgValue);
         }
 
@@ -179,6 +216,7 @@ static void setField(void **event, smsg_t *msg,
             free(propValue);
 }
 
+/* Parse a string and set either the metric_s64 or metric_d fields in the event*/
 static unsigned short setMetricFromString(const char* value, eventlist_t *event)
 {
     double dValue;
@@ -187,6 +225,7 @@ static unsigned short setMetricFromString(const char* value, eventlist_t *event)
 
     iValue = strtol((const char *)value, &errPtr, 10);
 
+    // if we parsed to the end of the string, then we have a simple integer.
     if ('\0' == *errPtr) {
       event->fields[RIEMANN_EVENT_FIELD_METRIC_S64] = calloc(1, sizeof(int64_t));
       *((int64_t *)event->fields[RIEMANN_EVENT_FIELD_METRIC_S64]) = iValue;
@@ -204,14 +243,18 @@ static unsigned short setMetricFromString(const char* value, eventlist_t *event)
       dValue = strtod(value, &errPtr);
     }
 
+    // if we reached the end of the string, we have a decimal.
     if('\0' == *errPtr) {
        event->fields[RIEMANN_EVENT_FIELD_METRIC_D] = calloc(1, sizeof(double));
        *((double*)event->fields[RIEMANN_EVENT_FIELD_METRIC_D]) = dValue;
        return 1;
     }
+
+    // otherwise we've got a non-numeric string.
     return 0;
 }
 
+/* Parses a json rValue and sets the metric_s64 or metric_d fields */
 static unsigned short setMetricFromJsonValue(struct json_object *json, eventlist_t *event)
 {
         json_type type;
@@ -230,31 +273,30 @@ static unsigned short setMetricFromJsonValue(struct json_object *json, eventlist
             return 0;
           case json_type_boolean:
           case json_type_int:
+            // we'll treat bool as a special case of integer.
             event->fields[RIEMANN_EVENT_FIELD_METRIC_S64] = calloc(1, sizeof(int64_t));
             *((int64_t *)event->fields[RIEMANN_EVENT_FIELD_METRIC_S64]) = json_object_get_int64(json);
             return 1;
           case json_type_double:
-            dbgprintf("I am handling a double!");
+            // double is simple.
             event->fields[RIEMANN_EVENT_FIELD_METRIC_D] = calloc(1, sizeof(double));
             *((double *)event->fields[RIEMANN_EVENT_FIELD_METRIC_D]) = json_object_get_double(json);
             return 1;
           case json_type_string:
-            dbgprintf("I am handling a string!");
+            // if we were given a string, we'll try and parse it.
             return setMetricFromString(json_object_get_string(json), event);
        }
        return 0;
 }
 
-
-static void 
-setFieldsFromConfig(eventlist_t *event, smsg_t *msg, instanceData *cfg)
+/* Take the config setting for `metric` and parse it to set a metric value*/
+static void
+setMetricFromConfig(eventlist_t *event, smsg_t *msg, instanceData *cfg)
 {
-    setField(event->fields, msg, 1, RIEMANN_EVENT_FIELD_HOST, cfg->host, cfg->propHost);
-    setField(event->fields, msg, 1, RIEMANN_EVENT_FIELD_SERVICE, cfg->service, cfg->propService);
-
-    if( NULL != event->fields[RIEMANN_EVENT_FIELD_METRIC_S64] || NULL != event->fields[RIEMANN_EVENT_FIELD_METRIC_D]) 
+    // If the metric has already been set, then we won't override it.
+    if( NULL != event->fields[RIEMANN_EVENT_FIELD_METRIC_S64] || 
+        NULL != event->fields[RIEMANN_EVENT_FIELD_METRIC_D]) 
        return;
-    
 
     int localRet;
     uchar* value;
@@ -263,6 +305,8 @@ setFieldsFromConfig(eventlist_t *event, smsg_t *msg, instanceData *cfg)
 
     struct json_object *json;
 
+    // If there is no resolved property for metric then we'll treat metric as a literal string
+    // This is the default case since we set metric to "1" if it isn't provided by a user.
     if (NULL == cfg->propMetric) {
        setMetricFromString((char *)cfg->metric, event);
     }
@@ -270,6 +314,7 @@ setFieldsFromConfig(eventlist_t *event, smsg_t *msg, instanceData *cfg)
     else {
         // we resolved a property earlier, so now we need to get it.
         switch(cfg->propMetric->id) {
+          // if we were given a JSON value, we should parse the metric from json
           case PROP_CEE:
           case PROP_CEE_ALL_JSON:
           case PROP_CEE_ALL_JSON_PLAIN:
@@ -278,6 +323,7 @@ setFieldsFromConfig(eventlist_t *event, smsg_t *msg, instanceData *cfg)
             if (localRet == RS_RET_OK)
               setMetricFromJsonValue(json, event);
             break;
+          // otherwise we'll parse it from the string.
           default:
              value = MsgGetProp(msg, NULL, cfg->propMetric, &valueLen, &mustFree, NULL);
              setMetricFromString((char *)value, event);
@@ -287,15 +333,40 @@ setFieldsFromConfig(eventlist_t *event, smsg_t *msg, instanceData *cfg)
     }
 }
 
+
+/* This is just a big list of fields that we might have set in config. We use these as defaults if 
+ * no value is provided in the incoming message.
+ * We treat some fields as mandatory, and always set a default for them. These are
+ *   - host
+ *   - service
+ *   - time
+ *   - metric
+ * None of these are _actually_ required by riemann, but setting them by default means that the 
+ * resulting message is vaguely sensible.
+ */
+
+static void 
+setFieldsFromConfig(eventlist_t *event, smsg_t *msg, instanceData *cfg)
+{
+    setFieldFromConfig(event->fields, msg, 1, RIEMANN_EVENT_FIELD_HOST, cfg->host, cfg->propHost);
+    setFieldFromConfig(event->fields, msg, 1, RIEMANN_EVENT_FIELD_SERVICE, cfg->service, cfg->propService);
+    setMetricFromConfig(event, msg, cfg);
+}
+
+
+/* If we receive an impstats message, we use this function to set the service according to the `name` field and they key of the metric.
+ * eg: given the json data {name="action 0", processed=10, failed=2} we will send two events with 
+ * the service names "action 0/processed" and "action 0/failed"
+ */ 
 static void setServiceName(void **fields, const char* instanceName, int instanceNameLen, const char* metricName) {
     
     if (instanceNameLen == 0) {
-       fields[RIEMANN_EVENT_FIELD_SERVICE] = strdup(instanceName);
+       fields[RIEMANN_EVENT_FIELD_SERVICE] = strdup(metricName);
     }
     else
     {
         size_t metricNameLen = strlen(metricName);
-        char* serviceName = malloc( sizeof(char) * (instanceNameLen + metricNameLen + 1) );
+        char* serviceName = calloc( (instanceNameLen + metricNameLen + 2), sizeof(char));
         strcpy(serviceName, instanceName);
         strcat(serviceName, "/");
         strcat(serviceName, metricName);
@@ -305,6 +376,7 @@ static void setServiceName(void **fields, const char* instanceName, int instance
 }
 
 
+/* This is the function responsible for mapping a message to an eventlist_t. */
 static eventlist_t *
 makeEventsFromMessage(smsg_t *msg, instanceData *cfg) 
 {
@@ -318,58 +390,70 @@ makeEventsFromMessage(smsg_t *msg, instanceData *cfg)
     char* instanceName = NULL;
     int instanceNameLen = 0;
     int err;
+    unsigned short hasValues;
 
     // This is the simple case. If we have no json subtree
     // then we're only sending a single event, based on the fields
     // that are defined in the config.
     if (NULL == cfg->propSubtree)
     {
-        list = eventlist_new(NULL);
+        list = eventlist_new();
         setFieldsFromConfig(list, msg, cfg);
         return list;
     }
 
-
+    // If we have a subtree configured, but we're unable to parse it
+    // for whatever reason, we'll fall back to just sending default fields.
     err = msgGetJSONPropJSON(msg, cfg->propSubtree, &json);
-    dbgprintf("GetPropJSON returned %d", err);
-
-    if (NULL == json)
+    if (NULL == json || err != RS_RET_OK) 
     {
-        dbgprintf("Json value is null, falling back to defaults");
-        list = eventlist_new(NULL);
+        list = eventlist_new();
         setFieldsFromConfig(list, msg, cfg);
         return list;
     }
 
+    // If we have found a json subtree, we'll check for a name property
+    // and use it to set up the service names.
     json_object_object_get_ex(json, "name", &val);
     if(NULL != val) {
       type = json_object_get_type(val);
-      dbgprintf("I've got a name field of type %d\n", type);
       if (type == json_type_string) {
          instanceName = json_object_get_string(val);
          instanceNameLen = strlen(instanceName);
       }
     }
 
+    // For each key/value in the json subtree we'll
+    // treat the key as a service name and try to parse
+    // the value as a metric.
     it = json_object_iter_begin(json);
     itEnd = json_object_iter_end(json);
 
-    next = eventlist_new(NULL);
+    // We declare our next linked list element here
+    // because it makes it easier to structure the code.
+    // If we get to the end of the function and haven't
+    // put any data into it, we'll free it.
+    next = eventlist_new();
+    hasValues = 0;
     while( !json_object_iter_equal(&it, &itEnd) )
     {
+       hasValues = 0;
        val = json_object_iter_peek_value(&it);
-       dbgprintf("handling %s", json_object_iter_peek_name(&it));
        type = json_object_get_type(val);
        if (setMetricFromJsonValue(val, next)) {
           setServiceName(next->fields, instanceName, instanceNameLen, json_object_iter_peek_name(&it));
           setFieldsFromConfig(next, msg, cfg);
           next->next = list;
           list = next;
-          next = eventlist_new(NULL);
+          hasValues = 1;
+          next = eventlist_new();
        }
        json_object_iter_next(&it);
     }
-    if (NULL == next->next)
+    if( NULL != val)
+       free(val);
+    free(json);
+    if (0 == hasValues)
        eventlist_free(next);
     return list;
 }
@@ -377,13 +461,15 @@ makeEventsFromMessage(smsg_t *msg, instanceData *cfg)
 static void copyField(eventlist_t *src, riemann_event_t *event, riemann_event_field_t field)
 {
     if( NULL != src->fields[field] )
-      riemann_event_set(event, field, src->fields[field]);
+     {
+        riemann_event_set(event, field, src->fields[field], RIEMANN_EVENT_FIELD_NONE);
+     }
 }
 
 static void copyIntField(eventlist_t *src, riemann_event_t *event, riemann_event_field_t field)
 {
     if( NULL != src->fields[field] )
-      riemann_event_set(event, field, *((int64_t*)src->fields[field]));
+      riemann_event_set(event, field, *((int64_t*)src->fields[field]), RIEMANN_EVENT_FIELD_NONE);
 }
 
 static riemann_message_t*
@@ -467,21 +553,21 @@ CODESTARTisCompatibleWithFeature
 		iRet = RS_RET_OK;
 ENDisCompatibleWithFeature
 
-static void
-setPropertyDescriptor(msgPropDescr_t **prop, uchar *name)
+static msgPropDescr_t *
+getPropertyDescriptor(uchar *name)
 {
     
     propid_t prop_id;
+    msgPropDescr_t *prop = NULL;
     propNameToID(name, &prop_id);
     
-    if (prop_id == PROP_INVALID) 
+    if (prop_id != PROP_INVALID) 
     {
-       *prop = NULL;
-       return;
+       prop = calloc(1, sizeof(msgPropDescr_t));
+       msgPropDescrFill(prop, name, strlen((const char *)name));
     }
 
-    *prop = (msgPropDescr_t*) calloc(1, sizeof *prop);
-    msgPropDescrFill(*prop, name, strlen((const char *)name));
+    return prop;
 }
 
 static void
@@ -522,13 +608,13 @@ CODESTARTnewActInst
 		} else if(!strcmp(actpblk.descr[i].name, "metric")) {
 			pData->metric = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
    		} else if(!strcmp(actpblk.descr[i].name, "subtree")) {
-			setPropertyDescriptor( &pData->propSubtree, (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL));
+			pData->propSubtree = getPropertyDescriptor((uchar*)es_str2cstr(pvals[i].val.d.estr, NULL));
 		} 
  }
-    setPropertyDescriptor(&pData->propHost, pData->host);
-    setPropertyDescriptor(&pData->propService, pData->service);
-    setPropertyDescriptor(&pData->propMetric, pData->metric);
-    setPropertyDescriptor(&pData->propTime, pData->time);
+    pData->propHost = getPropertyDescriptor(pData->host);
+    pData->propService = getPropertyDescriptor(pData->service);
+    pData->propMetric = getPropertyDescriptor(pData->metric);
+    pData->propTime = getPropertyDescriptor(pData->time);
 	
 	CODE_STD_STRING_REQUESTnewActInst(1);
     CHKiRet(OMSRsetEntry(*ppOMSR, 0, NULL, OMSR_TPL_AS_MSG));
