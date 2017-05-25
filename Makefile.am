@@ -271,6 +271,10 @@ if ENABLE_OMTCL
 SUBDIRS += contrib/omtcl
 endif
 
+if ENABLE_OMRIEMANN
+SUBDIRS += contrib/omriemann
+endif
+
 # tests are added as last element, because tests may need different
 # modules that need to be generated first
 SUBDIRS += tests

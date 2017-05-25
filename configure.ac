@@ -1877,6 +1877,27 @@ AM_CONDITIONAL(ENABLE_OMTCL, test x$enable_omtcl = xyes)
 
 # END TCL SUPPORT
 
+# RIEMANN SUPPORT
+
+AC_ARG_ENABLE(omriemann,
+        [AS_HELP_STRING([--enable-omriemann],[Compiles omriemann output module @<:@default=no@:>@])],
+        [case "${enableval}" in
+         yes) enable_omriemann="yes" ;;
+          no) enable_omriemann="no" ;;
+           *) AC_MSG_ERROR(bad value ${enableval} for --enable-omriemann) ;;
+         esac],
+        [enable_omriemann=no]
+)
+
+if test "x$enable_omriemann" = "xyes"; then
+    PKG_CHECK_MODULES(RIEMANN_C_CLIENT, riemann-client >= 0.6.1)
+fi
+AM_CONDITIONAL(ENABLE_OMRIEMANN, test x$enable_omriemann = xyes)
+
+
+
+# END RIEMANN SUPPORT
+
 # man pages
 AC_CHECKING([if required man pages already exist])
 have_to_generate_man_pages="no"
@@ -2003,6 +2024,7 @@ AC_CONFIG_FILES([Makefile \
 		contrib/omhttpfs/Makefile \
 		contrib/omamqp1/Makefile \
 		contrib/omtcl/Makefile \
+		contrib/omriemann/Makefile \
 		tests/Makefile])
 AC_OUTPUT
 
@@ -2055,6 +2077,7 @@ echo "    omrabbitmq module will be compiled:       $enable_omrabbitmq"
 echo "    omhttpfs module will be compiled:         $enable_omhttpfs"
 echo "    omamqp1 module will be compiled:          $enable_omamqp1"
 echo "    omtcl module will be compiled:            $enable_omtcl"
+echo "    omriemann module will be compiled:        $enable_omriemann"
 echo
 echo "---{ parser modules }---"
 echo "    pmlastmsg module will be compiled:        $enable_pmlastmsg"
