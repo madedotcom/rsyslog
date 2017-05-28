@@ -96,7 +96,9 @@
 #include <string.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#ifdef ENABLE_RELP
 #include <librelp.h>
+#endif
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <errno.h>
@@ -130,7 +132,8 @@ char *test_rs_strerror_r(int errnum, char *buf, size_t buflen) {
 #define EXIT_FAILURE 1
 #define INVALID_SOCKET -1
 /* Name of input file, must match $IncludeConfig in test suite .conf files */
-#define NETTEST_INPUT_CONF_FILE "nettest.input.conf" /* name of input file, must match $IncludeConfig in .conf files */
+#define NETTEST_INPUT_CONF_FILE "nettest.input.conf"
+/* name of input file, must match $IncludeConfig in .conf files */
 
 #define MAX_EXTRADATA_LEN 100*1024
 #define MAX_SENDBUF 2 * MAX_EXTRADATA_LEN
@@ -148,7 +151,9 @@ static int numMsgsToSend = 1; /* number of messages to send */
 static int numConnections = 1; /* number of connections to create */
 static int softLimitConnections  = 0; /* soft connection limit, see -c option description */
 static int *sockArray;  /* array of sockets to use */
+#ifdef ENABLE_RELP
 static relpClt_t **relpCltArray;  /* array of sockets to use */
+#endif
 static int msgNum = 0;	/* initial message number to start with */
 static int bShowProgress = 1; /* show progress messages */
 static int bSilent = 0; /* completely silent operation */
@@ -215,6 +220,7 @@ static void initTLSSess(int);
 static int sendTLS(int i, char *buf, int lenBuf);
 static void closeTLSSess(int __attribute__((unused)) i);
 
+#ifdef ENABLE_RELP
 /* RELP subsystem */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-security"
@@ -234,6 +240,7 @@ initRELP_PLAIN(void)
 	CHKRELP(relpEngineSetEnableCmd(pRelpEngine, (unsigned char*)"syslog",
 		eRelpCmdState_Required));
 }
+#endif /* #ifdef ENABLE_RELP */
 
 /* prepare send subsystem for UDP send */
 static int
@@ -272,6 +279,7 @@ int openConn(int *fd, const int connIdx)
 		port = targetPort;
 	}
 	if(transport == TP_RELP_PLAIN) {
+		#ifdef ENABLE_RELP
 		relpRetVal relp_r;
 		relpClt_t *relpClt;
 		char relpPort[16];
@@ -285,6 +293,7 @@ int openConn(int *fd, const int connIdx)
 			return(1);
 		}
 		*fd = 1; /* mimic "all ok" state */
+		#endif
 	} else { /* TCP, with or without TLS */
 		if((sock=socket(AF_INET, SOCK_STREAM, 0))==-1) {
 			perror("\nsocket()");
@@ -335,8 +344,10 @@ int openConnections(void)
 	sessArray = calloc(numConnections, sizeof(gnutls_session_t));
 #	endif
 	sockArray = calloc(numConnections, sizeof(int));
+	#ifdef ENABLE_RELP
 	if(transport == TP_RELP_PLAIN)
 		relpCltArray = calloc(numConnections, sizeof(relpClt_t*));
+	#endif
 	for(i = 0 ; i < numConnections ; ++i) {
 		if(i % 10 == 0) {
 			if(bShowProgress)
@@ -355,8 +366,10 @@ int openConnections(void)
 					 * at least something.
 					 */
 					if(transport == TP_RELP_PLAIN) {
+						#ifdef ENABLE_RELP
 						CHKRELP(relpEngineCltDestruct(pRelpEngine,
 							relpCltArray+i));
+						#endif
 					} else { /* TCP and TLS modes */
 						if(transport == TP_TLS)
 							closeTLSSess(i);
@@ -366,6 +379,11 @@ int openConnections(void)
 				}
 				numConnections = i;
 				printf("continuing with %d connections.\n", numConnections);
+				if(numConnections < 1) {
+					fprintf(stderr, "tcpflood could not open at least one "
+						"connection, error-terminating\n");
+					exit(1);
+				}
 				break;
 			}
 			return 1;
@@ -402,14 +420,13 @@ void closeConnections(void)
 
 	if(bShowProgress)
 		if(write(1, "      close connections", sizeof("      close connections")-1)){}
-	//if(transport == TP_RELP_PLAIN)
-		//sleep(10);	/* we need to let librelp settle a bit */
 	for(i = 0 ; i < numConnections ; ++i) {
 		if(i % 10 == 0 && bShowProgress) {
 			lenMsg = sprintf(msgBuf, "\r%5.5d", i);
 			if(write(1, msgBuf, lenMsg)){}
 		}
 		if(transport == TP_RELP_PLAIN) {
+			#ifdef ENABLE_RELP
 			relpRetVal relpr;
 			if(sockArray[i] != -1) {
 				relpr = relpEngineCltDestruct(pRelpEngine, relpCltArray+i);
@@ -418,6 +435,7 @@ void closeConnections(void)
 				}
 				sockArray[i] = -1;
 			}
+			#endif
 		} else { /* TCP and TLS modes */
 			if(sockArray[i] != -1) {
 				/* we try to not overrun the receiver by trying to flush buffers
@@ -509,7 +527,7 @@ genMsg(char *buf, size_t maxBuf, int *pLenBuf, struct instdata *inst)
 		}
 	} else {
 		/* use fixed message format from command line */
-		*pLenBuf = snprintf(buf, maxBuf, "%s\n", MsgToSend);
+		*pLenBuf = snprintf(buf, maxBuf, "%s%c", MsgToSend, frameDelim);
 	}
 	if (octateCountFramed == 1) {
 		snprintf(payloadLen, sizeof(payloadLen), "%d ", *pLenBuf);
@@ -609,6 +627,7 @@ int sendMessages(struct instdata *inst)
 				offsSendBuf = lenBuf;
 			}
 		} else if(transport == TP_RELP_PLAIN) {
+			#ifdef ENABLE_RELP
 			relpRetVal relp_ret;
 			if(sockArray[socknum] == -1) {
 				/* connection was dropped, need to re-establish */
@@ -626,6 +645,7 @@ int sendMessages(struct instdata *inst)
 				printf("\nrelpCltSendSyslog() failed with relp error code %d\n",
 					   relp_ret);
 			}
+			#endif
 		}
 		if(lenSend != lenBuf) {
 			printf("\r%5.5d\n", i);
@@ -993,7 +1013,8 @@ closeTLSSess(int i)
 #	else	/* NO TLS available */
 static void initTLS(void) {}
 static void initTLSSess(int __attribute__((unused)) i) {}
-static int sendTLS(int __attribute__((unused)) i, char __attribute__((unused)) *buf, int __attribute__((unused)) lenBuf) { return 0; }
+static int sendTLS(int __attribute__((unused)) i, char __attribute__((unused)) *buf,
+	int __attribute__((unused)) lenBuf) { return 0; }
 static void closeTLSSess(int __attribute__((unused)) i) {}
 #	endif
 
@@ -1104,7 +1125,9 @@ int main(int argc, char *argv[])
 						transport = TP_RELP_PLAIN;
 #					else
 						fprintf(stderr, "compiled without RELP support: "
-							"\"-Trelp-plain\" not supported!\n");
+							"\"-Trelp-plain\" not supported!\n"
+							"(add --enable-relp to ./configure options "
+							"if desired)\n");
 						exit(1);
 #					endif
 				} else {
@@ -1130,6 +1153,11 @@ int main(int argc, char *argv[])
 				exit (1);
 				break;
 		}
+	}
+
+	const char *const ci_env = getenv("CI");
+	if(ci_env != NULL && !strcmp(ci_env, "true")) {
+		bSilent = 1;	/* auto-apply silent option during CI runs */
 	}
 
 	if(bStatsRecords && waittime) {
@@ -1166,7 +1194,9 @@ int main(int argc, char *argv[])
 	if(transport == TP_TLS) {
 		initTLS();
 	} else if(transport == TP_RELP_PLAIN) {
+		#ifdef ENABLE_RELP
 		initRELP_PLAIN();
+		#endif
 	}
 
 	if(openConnections() != 0) {
@@ -1181,9 +1211,11 @@ int main(int argc, char *argv[])
 
 	closeConnections(); /* this is important so that we do not finish too early! */
 
+	#ifdef ENABLE_RELP
 	if(transport == TP_RELP_PLAIN) {
 		CHKRELP(relpEngineDestruct(&pRelpEngine));
 	}
+	#endif
 
 	if(nConnDrops > 0 && !bSilent)
 		printf("-D option initiated %ld connection closures\n", nConnDrops);

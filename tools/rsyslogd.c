@@ -717,7 +717,8 @@ rsRetVal createMainQueue(qqueue_t **ppQueue, uchar *pszQueueName, struct nvlst *
 	DEFiRet;
 
 	/* create message queue */
-	CHKiRet_Hdlr(qqueueConstruct(ppQueue, ourConf->globals.mainQ.MainMsgQueType, ourConf->globals.mainQ.iMainMsgQueueNumWorkers, ourConf->globals.mainQ.iMainMsgQueueSize, msgConsumer)) {
+	CHKiRet_Hdlr(qqueueConstruct(ppQueue, ourConf->globals.mainQ.MainMsgQueType,
+	ourConf->globals.mainQ.iMainMsgQueueNumWorkers, ourConf->globals.mainQ.iMainMsgQueueSize, msgConsumer)) {
 		/* no queue is fatal, we need to give up in that case... */
 		errmsg.LogError(0, iRet, "could not create (ruleset) main message queue"); \
 	}
@@ -757,25 +758,42 @@ rsRetVal createMainQueue(qqueue_t **ppQueue, uchar *pszQueueName, struct nvlst *
 			queuefilenames = qfn;
 		}
 
-		setQPROP(qqueueSetMaxFileSize, "$MainMsgQueueFileSize", ourConf->globals.mainQ.iMainMsgQueMaxFileSize);
-		setQPROP(qqueueSetsizeOnDiskMax, "$MainMsgQueueMaxDiskSpace", ourConf->globals.mainQ.iMainMsgQueMaxDiskSpace);
-		setQPROP(qqueueSetiDeqBatchSize, "$MainMsgQueueDequeueBatchSize", ourConf->globals.mainQ.iMainMsgQueDeqBatchSize);
+		setQPROP(qqueueSetMaxFileSize, "$MainMsgQueueFileSize",
+			ourConf->globals.mainQ.iMainMsgQueMaxFileSize);
+		setQPROP(qqueueSetsizeOnDiskMax, "$MainMsgQueueMaxDiskSpace",
+			ourConf->globals.mainQ.iMainMsgQueMaxDiskSpace);
+		setQPROP(qqueueSetiDeqBatchSize, "$MainMsgQueueDequeueBatchSize",
+			ourConf->globals.mainQ.iMainMsgQueDeqBatchSize);
 		setQPROPstr(qqueueSetFilePrefix, "$MainMsgQueueFileName", qfname);
-		setQPROP(qqueueSetiPersistUpdCnt, "$MainMsgQueueCheckpointInterval", ourConf->globals.mainQ.iMainMsgQPersistUpdCnt);
-		setQPROP(qqueueSetbSyncQueueFiles, "$MainMsgQueueSyncQueueFiles", ourConf->globals.mainQ.bMainMsgQSyncQeueFiles);
-		setQPROP(qqueueSettoQShutdown, "$MainMsgQueueTimeoutShutdown", ourConf->globals.mainQ.iMainMsgQtoQShutdown );
-		setQPROP(qqueueSettoActShutdown, "$MainMsgQueueTimeoutActionCompletion", ourConf->globals.mainQ.iMainMsgQtoActShutdown);
-		setQPROP(qqueueSettoWrkShutdown, "$MainMsgQueueWorkerTimeoutThreadShutdown", ourConf->globals.mainQ.iMainMsgQtoWrkShutdown);
+		setQPROP(qqueueSetiPersistUpdCnt, "$MainMsgQueueCheckpointInterval",
+			ourConf->globals.mainQ.iMainMsgQPersistUpdCnt);
+		setQPROP(qqueueSetbSyncQueueFiles, "$MainMsgQueueSyncQueueFiles",
+			ourConf->globals.mainQ.bMainMsgQSyncQeueFiles);
+		setQPROP(qqueueSettoQShutdown, "$MainMsgQueueTimeoutShutdown",
+			ourConf->globals.mainQ.iMainMsgQtoQShutdown );
+		setQPROP(qqueueSettoActShutdown, "$MainMsgQueueTimeoutActionCompletion",
+			ourConf->globals.mainQ.iMainMsgQtoActShutdown);
+		setQPROP(qqueueSettoWrkShutdown, "$MainMsgQueueWorkerTimeoutThreadShutdown",
+			ourConf->globals.mainQ.iMainMsgQtoWrkShutdown);
 		setQPROP(qqueueSettoEnq, "$MainMsgQueueTimeoutEnqueue", ourConf->globals.mainQ.iMainMsgQtoEnq);
-		setQPROP(qqueueSetiHighWtrMrk, "$MainMsgQueueHighWaterMark", ourConf->globals.mainQ.iMainMsgQHighWtrMark);
-		setQPROP(qqueueSetiLowWtrMrk, "$MainMsgQueueLowWaterMark", ourConf->globals.mainQ.iMainMsgQLowWtrMark);
-		setQPROP(qqueueSetiDiscardMrk, "$MainMsgQueueDiscardMark", ourConf->globals.mainQ.iMainMsgQDiscardMark);
-		setQPROP(qqueueSetiDiscardSeverity, "$MainMsgQueueDiscardSeverity", ourConf->globals.mainQ.iMainMsgQDiscardSeverity);
-		setQPROP(qqueueSetiMinMsgsPerWrkr, "$MainMsgQueueWorkerThreadMinimumMessages", ourConf->globals.mainQ.iMainMsgQWrkMinMsgs);
-		setQPROP(qqueueSetbSaveOnShutdown, "$MainMsgQueueSaveOnShutdown", ourConf->globals.mainQ.bMainMsgQSaveOnShutdown);
-		setQPROP(qqueueSetiDeqSlowdown, "$MainMsgQueueDequeueSlowdown", ourConf->globals.mainQ.iMainMsgQDeqSlowdown);
-		setQPROP(qqueueSetiDeqtWinFromHr,  "$MainMsgQueueDequeueTimeBegin", ourConf->globals.mainQ.iMainMsgQueueDeqtWinFromHr);
-		setQPROP(qqueueSetiDeqtWinToHr,    "$MainMsgQueueDequeueTimeEnd", ourConf->globals.mainQ.iMainMsgQueueDeqtWinToHr);
+		setQPROP(qqueueSetiHighWtrMrk, "$MainMsgQueueHighWaterMark",
+			ourConf->globals.mainQ.iMainMsgQHighWtrMark);
+		setQPROP(qqueueSetiLowWtrMrk, "$MainMsgQueueLowWaterMark",
+			ourConf->globals.mainQ.iMainMsgQLowWtrMark);
+		setQPROP(qqueueSetiDiscardMrk, "$MainMsgQueueDiscardMark",
+			ourConf->globals.mainQ.iMainMsgQDiscardMark);
+		setQPROP(qqueueSetiDiscardSeverity, "$MainMsgQueueDiscardSeverity",
+			ourConf->globals.mainQ.iMainMsgQDiscardSeverity);
+		setQPROP(qqueueSetiMinMsgsPerWrkr, "$MainMsgQueueWorkerThreadMinimumMessages",
+			ourConf->globals.mainQ.iMainMsgQWrkMinMsgs);
+		setQPROP(qqueueSetbSaveOnShutdown, "$MainMsgQueueSaveOnShutdown",
+			ourConf->globals.mainQ.bMainMsgQSaveOnShutdown);
+		setQPROP(qqueueSetiDeqSlowdown, "$MainMsgQueueDequeueSlowdown",
+			ourConf->globals.mainQ.iMainMsgQDeqSlowdown);
+		setQPROP(qqueueSetiDeqtWinFromHr,  "$MainMsgQueueDequeueTimeBegin",
+			ourConf->globals.mainQ.iMainMsgQueueDeqtWinFromHr);
+		setQPROP(qqueueSetiDeqtWinToHr,    "$MainMsgQueueDequeueTimeEnd",
+			ourConf->globals.mainQ.iMainMsgQueueDeqtWinToHr);
 
 	#	undef setQPROP
 	#	undef setQPROPstr
@@ -806,7 +824,9 @@ void
 rsyslogd_submitErrMsg(const int severity, const int iErr, const uchar *msg)
 {
 	if (glbl.GetGlobalInputTermState() == 1) {
-		dfltErrLogger(severity, iErr, msg);
+		/* After fork the stderr is unusable (dfltErrLogger uses is internally) */
+		if(!doFork)
+			dfltErrLogger(severity, iErr, msg);
 	} else {
 		logmsgInternal(iErr, LOG_SYSLOG|(severity & 0x07), msg, 0);
 	}
@@ -820,10 +840,10 @@ submitMsgWithDfltRatelimiter(smsg_t *pMsg)
 
 
 static void
-logmsgInternal_doWrite(smsg_t *const __restrict__ pMsg)
+logmsgInternal_doWrite(smsg_t *pMsg)
 {
 	if(bProcessInternalMessages) {
-		ratelimitAddMsg(internalMsg_ratelimiter, NULL, pMsg);
+		submitMsg2(pMsg);
 	} else {
 		const int pri = getPRIi(pMsg);
 		uchar *const msg = getMSG(pMsg);
@@ -832,6 +852,8 @@ logmsgInternal_doWrite(smsg_t *const __restrict__ pMsg)
 #		else
 		syslog(pri, "%s", msg);
 #		endif
+		/* we have emitted the message and must destruct it */
+		msgDestruct(&pMsg);
 	}
 }
 
@@ -867,11 +889,7 @@ logmsgInternalSubmit(const int iErr, const syslog_pri_t pri, const size_t lenMsg
 	pMsg->msgFlags  = flags;
 	msgSetPRI(pMsg, pri);
 
-	if(bHaveMainQueue == 0) { /* not yet in queued mode */
-		iminternalAddMsg(pMsg);
-	} else {
-		logmsgInternal_doWrite(pMsg);
-	}
+	iminternalAddMsg(pMsg);
 finalize_it:
 	RETiRet;
 }
@@ -1077,11 +1095,12 @@ finalize_it:
 
 
 static void
-hdlr_sigttin(void)
+hdlr_sigttin_ou(void)
 {
 	/* this is just a dummy to care for our sigttin input
-	 * module cancel interface. The important point is that
-	 * it actually does *NOTHING*.
+	 * module cancel interface and sigttou internal message
+	 * notificaton/mainloop wakeup mechanism. The important
+	 * point is that it actually does *NOTHING*.
 	 */
 }
 
@@ -1332,6 +1351,10 @@ initAll(int argc, char **argv)
 				perror("chroot");
 				exit(1);
 			}
+            		if(chdir("/") != 0) {
+                		perror("chdir");
+		                exit(1);
+		            }
 			break;
 		case 'u':		/* misc user settings */
 			iHelperUOpt = (arg == NULL) ? 0 : atoi(arg);
@@ -1343,11 +1366,12 @@ initAll(int argc, char **argv)
 					 "configuration parameter instead.\n");
 				glbl.SetParseHOSTNAMEandTAG(0);
 			}
-			if(iHelperUOpt & 0x02)
+			if(iHelperUOpt & 0x02) {
 				fprintf (stderr, "rsyslogd: the -u command line option will go away "
 					 "soon.\n"
 					 "For the 0x02 bit, please use the -C option instead.");
 				bChDirRoot = 0;
+			}
 			break;
 		case 'C':
 			bChDirRoot = 0;
@@ -1429,7 +1453,8 @@ initAll(int argc, char **argv)
 		hdlr_enable(SIGQUIT, SIG_IGN);
 	}
 	hdlr_enable(SIGTERM, rsyslogdDoDie);
-	hdlr_enable(SIGTTIN, hdlr_sigttin);
+	hdlr_enable(SIGTTIN, hdlr_sigttin_ou);
+	hdlr_enable(SIGTTOU, hdlr_sigttin_ou);
 	hdlr_enable(SIGCHLD, hdlr_sigchld);
 	hdlr_enable(SIGHUP, hdlr_sighup);
 
@@ -1484,13 +1509,20 @@ finalize_it:
  * really help us. TODO: add error messages?
  * rgerhards, 2007-08-03
  */
-static void
+void
 processImInternal(void)
 {
 	smsg_t *pMsg;
+	smsg_t *repMsg;
 
 	while(iminternalRemoveMsg(&pMsg) == RS_RET_OK) {
-		logmsgInternal_doWrite(pMsg);
+		rsRetVal localRet = ratelimitMsg(internalMsg_ratelimiter, pMsg, &repMsg);
+		if(repMsg != NULL) {
+			logmsgInternal_doWrite(repMsg);
+		}
+		if(localRet == RS_RET_OK) {
+			logmsgInternal_doWrite(pMsg);
+		}
 	}
 }
 
@@ -1617,6 +1649,70 @@ rsyslogdDoDie(int sig)
 }
 
 
+static void
+wait_timeout(void)
+{
+#if defined(_AIX) /* AIXPORT :  SRC support start */
+	char buf[256];
+	fd_set rfds;
+#endif /* AIXPORT : src end */
+	struct timeval tvSelectTimeout;
+
+	tvSelectTimeout.tv_sec = janitorInterval * 60; /* interval is in minutes! */
+	tvSelectTimeout.tv_usec = 0;
+#ifndef _AIX
+	select(1, NULL, NULL, NULL, &tvSelectTimeout);
+#else /* AIXPORT :  SRC support start */
+	if(src_exists)
+	{
+		FD_ZERO(&rfds);
+		FD_SET(SRC_FD, &rfds);
+	}
+	if(!src_exists)
+		select(1, NULL, NULL, NULL, &tvSelectTimeout);
+	else if(select(SRC_FD + 1, (fd_set *)&rfds, NULL, NULL, &tvSelectTimeout))
+	{
+		if(FD_ISSET(SRC_FD, &rfds))
+		{
+			rc = recvfrom(SRC_FD, &srcpacket, SRCMSG, 0, &srcaddr, &addrsz);
+			if(rc < 0)
+			if (errno != EINTR)
+			{
+				fprintf(stderr,"%s: ERROR: '%d' recvfrom\n", progname,errno);
+				exit(1);
+			} else  /* punt on short read */
+				continue;
+
+			switch(srcpacket.subreq.action)
+			{
+				case START:
+					dosrcpacket(SRC_SUBMSG,"ERROR: rsyslogd does not support this option.\n",sizeof(struct srcrep));
+				break;
+				case STOP:
+					if (srcpacket.subreq.object == SUBSYSTEM) {
+						dosrcpacket(SRC_OK,NULL,sizeof(struct srcrep));
+						(void) snprintf(buf, sizeof(buf) / sizeof(char), " [origin software=\"rsyslogd\" " "swVersion=\"" VERSION \
+							"\" x-pid=\"%d\" x-info=\"http://www.rsyslog.com\"]" " exiting due to stopsrc.",
+							(int) glblGetOurPid());
+						errno = 0;
+						logmsgInternal(NO_ERRCODE, LOG_SYSLOG|LOG_INFO, (uchar*)buf, 0);
+						return ;
+					} else
+						dosrcpacket(SRC_SUBMSG,"ERROR: rsyslogd does not support this option.\n",sizeof(struct srcrep));
+				break;
+				case REFRESH:
+					dosrcpacket(SRC_SUBMSG,"ERROR: rsyslogd does not support this option.\n", sizeof(struct srcrep));
+				break;
+				default:
+					dosrcpacket(SRC_SUBICMD,NULL,sizeof(struct srcrep));
+				break;
+
+			}
+		}
+	}
+#endif /* AIXPORT : SRC end */
+}
+
 /* This is the main processing loop. It is called after successful initialization.
  * When it returns, the syslogd terminates.
  * Its sole function is to provide some housekeeping things. The real work is done
@@ -1625,87 +1721,21 @@ rsyslogdDoDie(int sig)
 static void
 mainloop(void)
 {
-	struct timeval tvSelectTimeout;
 	time_t tTime;
-	/* AIXPORT :  SRC support start */
-#if defined(_AIX)
-	char buf[256];
-	fd_set rfds;
-#endif
-	/* AIXPORT : src end */
 
 	BEGINfunc
-	/* first check if we have any internal messages queued and spit them out. */
-	processImInternal();
 
-	while(!bFinished){
-		/* AIXPORT :  SRC support start */
-#if defined(_AIX)
-		if(src_exists)
-		{
-			FD_ZERO(&rfds);
-			FD_SET(SRC_FD, &rfds);
-		}
-#endif
-		/* AIXPORT : src end */
-		tvSelectTimeout.tv_sec = janitorInterval * 60; /* interval is in minutes! */
-		tvSelectTimeout.tv_usec = 0;
-#ifndef _AIX
-		select(1, NULL, NULL, NULL, &tvSelectTimeout);
-#else
-		/* AIXPORT :  SRC support start */
-		if(!src_exists)
-			select(1, NULL, NULL, NULL, &tvSelectTimeout);
-		else if(select(SRC_FD + 1, (fd_set *)&rfds, NULL, NULL, &tvSelectTimeout))
-		{
-			if(FD_ISSET(SRC_FD, &rfds))
-			{
-				rc = recvfrom(SRC_FD, &srcpacket, SRCMSG, 0, &srcaddr, &addrsz);
-				if(rc < 0)
-				if (errno != EINTR)
-				{
-					fprintf(stderr,"%s: ERROR: '%d' recvfrom\n", progname,errno);
-					exit(1);
-				} else  /* punt on short read */
-					continue;
-
-				switch(srcpacket.subreq.action)
-				{
-					case START:
-						dosrcpacket(SRC_SUBMSG,"ERROR: rsyslogd does not support this option.\n",sizeof(struct srcrep));
-					break;
-					case STOP:
-						if (srcpacket.subreq.object == SUBSYSTEM) {
-							dosrcpacket(SRC_OK,NULL,sizeof(struct srcrep));
-							(void) snprintf(buf, sizeof(buf) / sizeof(char), " [origin software=\"rsyslogd\" " "swVersion=\"" VERSION \
-								"\" x-pid=\"%d\" x-info=\"http://www.rsyslog.com\"]" " exiting due to stopsrc.",
-								(int) glblGetOurPid());
-							errno = 0;
-							logmsgInternal(NO_ERRCODE, LOG_SYSLOG|LOG_INFO, (uchar*)buf, 0);
-							return ;
-						} else
-							dosrcpacket(SRC_SUBMSG,"ERROR: rsyslogd does not support this option.\n",sizeof(struct srcrep));
-					break;
-					case REFRESH:
-						dosrcpacket(SRC_SUBMSG,"ERROR: rsyslogd does not support this option.\n", sizeof(struct srcrep));
-                        		break;
-					default:
-						dosrcpacket(SRC_SUBICMD,NULL,sizeof(struct srcrep));
-					break;
-
-				}
-			}
-		}
-#endif
-	/* AIXPORT : SRC end */		
-
+	do {
+		processImInternal();
+		wait_timeout();
 		if(bChildDied) {
 			pid_t child;
 			do {
 				child = waitpid(-1, NULL, WNOHANG);
-				DBGPRINTF("rsyslogd: mainloop waitpid (with-no-hang) returned %d\n", child);
+				DBGPRINTF("rsyslogd: mainloop waitpid (with-no-hang) returned %u\n", (unsigned) child);
 				if (child != -1 && child != 0) {
-					errmsg.LogError(0, RS_RET_OK, "Child %d has terminated, reaped by main-loop.", child);
+					errmsg.LogError(0, RS_RET_OK, "Child %d has terminated, reaped "
+						"by main-loop.", (unsigned) child);
 				}
 			} while(child > 0);
 			bChildDied = 0;
@@ -1724,7 +1754,7 @@ mainloop(void)
 			bHadHUP = 0;
 		}
 
-	}
+	} while(!bFinished); /* end do ... while() */
 	ENDfunc
 }
 
@@ -1773,9 +1803,10 @@ deinitAll(void)
 		errno = 0;
 		logmsgInternal(NO_ERRCODE, LOG_SYSLOG|LOG_INFO, (uchar*)buf, 0);
 	}
-	/* we sleep for 50ms to give the queue a chance to pick up the exit message;
-	 * otherwise we have seen cases where the message did not make it to log
-	 * files, even on idle systems.
+	processImInternal(); /* make sure not-yet written internal messages are processed */
+	/* we sleep a couple of ms to give the queue a chance to pick up the late messages
+	 * (including exit message); otherwise we have seen cases where the message did
+	 * not make it to log files, even on idle systems.
 	 */
 	srSleep(0, 50);
 
@@ -1867,5 +1898,8 @@ main(int argc, char **argv)
 
 	mainloop();
 	deinitAll();
+#ifdef HAVE_LIBLOGGING_STDLOG
+	stdlog_close(stdlog_hdl);
+#endif
 	return 0;
 }

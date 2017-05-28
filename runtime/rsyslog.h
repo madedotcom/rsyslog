@@ -99,7 +99,8 @@ extern int src_exists;
 #define LOG_NFACILITIES 24+1 /* plus one for our special "invld" facility! */
 #define LOG_MAXPRI 191	/* highest supported valid PRI value --> RFC3164, RFC5424 */
 #undef LOG_MAKEPRI
-#define LOG_PRI_INVLD	(LOG_INVLD|LOG_DEBUG)	/* PRI is invalid --> special "invld.=debug" PRI code (rsyslog-specific) */
+#define LOG_PRI_INVLD	(LOG_INVLD|LOG_DEBUG)
+/* PRI is invalid --> special "invld.=debug" PRI code (rsyslog-specific) */
 
 #define	LOG_EMERG	0	/* system is unusable */
 #define	LOG_ALERT	1	/* action must be taken immediately */
@@ -182,7 +183,9 @@ enum rsRetVal_				/** return value. All methods return this if not specified oth
 	/* begin regular error codes */
 	RS_RET_NOT_IMPLEMENTED = -7,	/**< implementation is missing (probably internal error or lazyness ;)) */
 	RS_RET_OUT_OF_MEMORY = -6,	/**< memory allocation failed */
-	RS_RET_PROVIDED_BUFFER_TOO_SMALL = -50,/**< the caller provided a buffer, but the called function sees the size of this buffer is too small - operation not carried out */
+	RS_RET_PROVIDED_BUFFER_TOO_SMALL = -50,
+/*< the caller provided a buffer, but the called function sees the size of this buffer is too small -
+operation not carried out */
 	RS_RET_TRUE = -3,		/**< to indicate a true state (can be used as TRUE, legacy) */
 	RS_RET_FALSE = -2,		/**< to indicate a false state (can be used as FALSE, legacy) */
 	RS_RET_NO_IRET = -8,	/**< This is a trick for the debuging system - it means no iRet is provided  */
@@ -343,13 +346,15 @@ enum rsRetVal_				/** return value. All methods return this if not specified oth
 	RS_RET_ERR_OPEN_KLOG = -2145, /**< error opening or reading the kernel log socket */
 	RS_RET_ERR_AQ_CONLOG = -2146, /**< error aquiring console log (on solaris) */
 	RS_RET_ERR_DOOR = -2147, /**< some problems with handling the Solaris door functionality */
-	RS_RET_NO_SRCNAME_TPL = -2150, /**< sourcename template was not specified where one was needed (omudpspoof spoof addr) */
+	RS_RET_NO_SRCNAME_TPL = -2150, /**< sourcename template was not specified where one was needed
+(omudpspoof spoof addr) */
 	RS_RET_HOST_NOT_SPECIFIED = -2151, /**< (target) host was not specified where it was needed */
 	RS_RET_ERR_LIBNET_INIT = -2152, /**< error initializing libnet, e.g. because not running as root */
 	RS_RET_FORCE_TERM = -2153,	/**< thread was forced to terminate by bShallShutdown, a state, not an error */
 	RS_RET_RULES_QUEUE_EXISTS = -2154,/**< we were instructed to create a new ruleset queue, but one already exists */
 	RS_RET_NO_CURR_RULESET = -2155,/**< no current ruleset exists (but one is required) */
-	RS_RET_NO_MSG_PASSING = -2156,/**< output module interface parameter passing mode "MSG" is not available but required */
+	RS_RET_NO_MSG_PASSING = -2156,
+/*< output module interface parameter passing mode "MSG" is not available but required */
 	RS_RET_RULESET_NOT_FOUND = -2157,/**< a required ruleset could not be found */
 	RS_RET_NO_RULESET= -2158,/**< no ruleset name as specified where one was needed */
 	RS_RET_PARSER_NOT_FOUND = -2159,/**< parser with the specified name was not found */
@@ -363,7 +368,8 @@ enum rsRetVal_				/** return value. All methods return this if not specified oth
 	RS_RET_CONF_NOT_GLBL = -2167,	/**< $Begin not in global scope */
 	RS_RET_CONF_IN_GLBL = -2168,	/**< $End when in global scope */
 	RS_RET_CONF_INVLD_END = -2169,	/**< $End for wrong conf object (probably nesting error) */
-	RS_RET_CONF_INVLD_SCOPE = -2170,/**< config statement not valid in current scope (e.g. global stmt in action block) */
+	RS_RET_CONF_INVLD_SCOPE = -2170,
+/*< config statement not valid in current scope (e.g. global stmt in action block) */
 	RS_RET_CONF_END_NO_ACT = -2171,	/**< end of action block, but no actual action specified */
 	RS_RET_NO_LSTN_DEFINED = -2172, /**< no listener defined (e.g. inside an input module) */
 	RS_RET_EPOLL_CR_FAILED = -2173, /**< epoll_create() failed */
@@ -474,9 +480,9 @@ enum rsRetVal_				/** return value. All methods return this if not specified oth
 	RS_RET_FILE_ALREADY_IN_TABLE = -2431,/**< in imfile: table already contains to be added file */
 	RS_RET_ERR_DROP_PRIV = -2432,/**< error droping privileges */
 	RS_RET_FILE_OPEN_ERROR = -2433, /**< error other than "not found" occured during open() */
-	RS_RET_FILE_CHOWN_ERROR = -2434, /**< error during chown() */
 	RS_RET_RENAME_TMP_QI_ERROR = -2435, /**< renaming temporary .qi file failed */
 	RS_RET_ERR_SETENV = -2436, /**< error setting an environment variable */
+	RS_RET_DIR_CHOWN_ERROR = -2437, /**< error during chown() */
 
 	/* RainerScript error messages (range 1000.. 1999) */
 	RS_RET_SYSVAR_NOT_FOUND = 1001, /**< system variable could not be found (maybe misspelled) */
@@ -484,7 +490,8 @@ enum rsRetVal_				/** return value. All methods return this if not specified oth
 
 	/* some generic error/status codes */
 	RS_RET_OK = 0,			/**< operation successful */
-	RS_RET_OK_DELETE_LISTENTRY = 1,	/**< operation successful, but callee requested the deletion of an entry (special state) */
+	RS_RET_OK_DELETE_LISTENTRY = 1,
+/*< operation successful, but callee requested the deletion of an entry (special state) */
 	RS_RET_TERMINATE_NOW = 2,	/**< operation successful, function is requested to terminate (mostly used with threads) */
 	RS_RET_NO_RUN = 3,		/**< operation successful, but function does not like to be executed */
 	RS_RET_IDLE = 4,		/**< operation successful, but callee is idle (e.g. because queue is empty) */
@@ -616,7 +623,8 @@ struct actWrkrIParams {
 #define MUTEX_ALREADY_LOCKED	0
 #define LOCK_MUTEX		1
 
-/* The following prototype is convenient, even though it may not be the 100% correct place.. -- rgerhards 2008-01-07 */
+/* The following prototype is convenient, even though it may not be the 100%
+correct place.. -- rgerhards 2008-01-07 */
 void dbgprintf(const char *, ...) __attribute__((format(printf, 1, 2)));
 
 
@@ -636,6 +644,7 @@ extern uchar *glblModPath; /* module load path */
 extern void (*glblErrLogger)(const int, const int, const uchar*);
 
 /* some runtime prototypes */
+void processImInternal(void);
 rsRetVal rsrtInit(const char **ppErrObj, obj_if_t *pObjIF);
 rsRetVal rsrtExit(void);
 int rsrtIsInit(void);
@@ -649,7 +658,11 @@ void dfltErrLogger(const int, const int, const uchar *errMsg);
  * a dummy variable. This requires review of where in code empty structs
  * are already defined. -- rgerhards, 2010-07-26
  */
+#ifdef OS_SOLARIS
+#define EMPTY_STRUCT  int remove_me_when_first_real_member_is_added;
+#else
 #define EMPTY_STRUCT
+#endif
 
 /* TODO: remove this -- this is only for transition of the config system */
 extern rsconf_t *ourConf; /* defined by syslogd.c, a hack for functions that do not

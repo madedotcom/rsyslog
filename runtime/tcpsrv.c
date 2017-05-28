@@ -384,7 +384,8 @@ initTCPListener(tcpsrv_t *pThis, tcpLstnPortList_t *pPortEntry)
 		TCPLstnPort = pPortEntry->pszPort;
 
 	// pPortEntry->pszAddr = NULL ==> bind to all interfaces
-        CHKiRet(netstrm.LstnInit(pThis->pNS, (void*)pPortEntry, addTcpLstn, TCPLstnPort, pPortEntry->pszAddr, pThis->iSessMax));
+        CHKiRet(netstrm.LstnInit(pThis->pNS, (void*)pPortEntry, addTcpLstn, TCPLstnPort,
+	pPortEntry->pszAddr, pThis->iSessMax));
 
 finalize_it:
 	RETiRet;
@@ -406,7 +407,8 @@ create_tcp_socket(tcpsrv_t *pThis)
 	while(pEntry != NULL) {
 		localRet = initTCPListener(pThis, pEntry);
 		if(localRet != RS_RET_OK) {
-			errmsg.LogError(0, localRet, "Could not create tcp listener, ignoring port %s bind-address %s.", pEntry->pszPort, pEntry->pszAddr);
+			errmsg.LogError(0, localRet, "Could not create tcp listener, ignoring port "
+			"%s bind-address %s.", pEntry->pszPort, pEntry->pszAddr);
 		}
 		pEntry = pEntry->pNext;
 	}
@@ -932,8 +934,9 @@ Run(tcpsrv_t *pThis)
 		localRet = processWorkset(pThis, pPoll, numEntries, workset);
 		if(localRet != RS_RET_OK) {
 			if (bFailed == FALSE) {
-				errmsg.LogError(0, localRet, "tcpsrv listener (inputname: '%s') failed to processed incoming connection with error %d",
-					(pThis->pszInputName == NULL) ? (uchar*)"*UNSET*" : pThis->pszInputName, localRet);
+				errmsg.LogError(0, localRet, "tcpsrv listener (inputname: '%s') failed "
+				"to processed incoming connection with error %d",
+				(pThis->pszInputName == NULL) ? (uchar*)"*UNSET*" : pThis->pszInputName, localRet);
 				bFailed = TRUE; 
 			} else {
 				DBGPRINTF("tcpsrv listener (inputname: '%s') still failing to process incoming connection with error %d\n",
@@ -964,7 +967,9 @@ BEGINobjConstruct(tcpsrv) /* be sure to specify the object type also in END macr
 	pThis->iSessMax = TCPSESS_MAX_DEFAULT;
 	pThis->iLstnMax = TCPLSTN_MAX_DEFAULT;
 	pThis->addtlFrameDelim = TCPSRV_NO_ADDTL_DELIMITER;
+	pThis->maxFrameSize = 200000;
 	pThis->bDisableLFDelim = 0;
+	pThis->discardTruncatedMsg = 0;
 	pThis->OnMsgReceive = NULL;
 	pThis->dfltTZ[0] = '\0';
 	pThis->bSPFramingFix = 0;
@@ -1185,6 +1190,19 @@ SetbDisableLFDelim(tcpsrv_t *pThis, int bVal)
 }
 
 
+/* discard the truncated msg part
+ * -- PascalWithopf, 2017-04-20
+ */
+static rsRetVal
+SetDiscardTruncatedMsg(tcpsrv_t *pThis, int discard)
+{
+	DEFiRet;
+	ISOBJ_TYPE_assert(pThis, tcpsrv);
+	pThis->discardTruncatedMsg = discard;
+	RETiRet;
+}
+
+
 /* Set additional framing to use (if any) -- rgerhards, 2008-12-10 */
 static rsRetVal
 SetAddtlFrameDelim(tcpsrv_t *pThis, int iDelim)
@@ -1192,6 +1210,17 @@ SetAddtlFrameDelim(tcpsrv_t *pThis, int iDelim)
 	DEFiRet;
 	ISOBJ_TYPE_assert(pThis, tcpsrv);
 	pThis->addtlFrameDelim = iDelim;
+	RETiRet;
+}
+
+
+/* Set max frame size for octet counted -- PascalWithopf, 2017-04-20*/
+static rsRetVal
+SetMaxFrameSize(tcpsrv_t *pThis, int maxFrameSize)
+{
+	DEFiRet;
+	ISOBJ_TYPE_assert(pThis, tcpsrv);
+	pThis->maxFrameSize = maxFrameSize;
 	RETiRet;
 }
 
@@ -1400,7 +1429,9 @@ CODESTARTobjQueryInterface(tcpsrv)
 	pIf->SetDfltTZ = SetDfltTZ;
 	pIf->SetbSPFramingFix = SetbSPFramingFix;
 	pIf->SetAddtlFrameDelim = SetAddtlFrameDelim;
+	pIf->SetMaxFrameSize = SetMaxFrameSize;
 	pIf->SetbDisableLFDelim = SetbDisableLFDelim;
+	pIf->SetDiscardTruncatedMsg = SetDiscardTruncatedMsg;
 	pIf->SetSessMax = SetSessMax;
 	pIf->SetUseFlowControl = SetUseFlowControl;
 	pIf->SetLstnMax = SetLstnMax;

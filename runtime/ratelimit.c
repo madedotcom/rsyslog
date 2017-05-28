@@ -132,7 +132,7 @@ tellLostCnt(ratelimit_t *ratelimit)
  * be called concurrently.
  */
 static int
-withinRatelimit(ratelimit_t *ratelimit, time_t tt)
+withinRatelimit(ratelimit_t *ratelimit, time_t tt, char* appname)
 {
 	int ret;
 	uchar msgbuf[1024];
@@ -156,8 +156,8 @@ withinRatelimit(ratelimit_t *ratelimit, time_t tt)
 	if(ratelimit->begin == 0)
 		ratelimit->begin = tt;
 
-	/* resume if we go out of time window */
-	if(tt > ratelimit->begin + ratelimit->interval) {
+	/* resume if we go out of time window or if time has gone backwards */
+	if((tt > ratelimit->begin + ratelimit->interval) || (tt < ratelimit->begin) ) {
 		ratelimit->begin = 0;
 		ratelimit->done = 0;
 		tellLostCnt(ratelimit);
@@ -171,8 +171,8 @@ withinRatelimit(ratelimit_t *ratelimit, time_t tt)
 		ratelimit->missed++;
 		if(ratelimit->missed == 1) {
 			snprintf((char*)msgbuf, sizeof(msgbuf),
-			         "%s: begin to drop messages due to rate-limiting",
-				 ratelimit->name);
+                     "%s from <%s>: begin to drop messages due to rate-limiting",
+                 ratelimit->name, appname);
 			logmsgInternal(RS_RET_RATE_LIMITED, LOG_SYSLOG|LOG_INFO, msgbuf, 0);
 		}
 		ret = 0;
@@ -215,7 +215,9 @@ ratelimitMsg(ratelimit_t *ratelimit, smsg_t *pMsg, smsg_t **ppRepMsg)
 	/* Only the messages having severity level at or below the
 	 * treshold (the value is >=) are subject to ratelimiting. */
 	if(ratelimit->interval && (pMsg->iSeverity >= ratelimit->severity)) {
-		if(withinRatelimit(ratelimit, pMsg->ttGenTime) == 0) {
+        char namebuf[512]; /* 256 for FGDN adn 256 for APPNAME should be enough */
+        snprintf(namebuf, sizeof namebuf, "%s:%s", getHOSTNAME(pMsg), getAPPNAME(pMsg, 0));
+        if(withinRatelimit(ratelimit, pMsg->ttGenTime, namebuf) == 0) {
 			msgDestruct(&pMsg);
 			ABORT_FINALIZE(RS_RET_DISCARDMSG);
 		}
@@ -259,6 +261,7 @@ ratelimitAddMsg(ratelimit_t *ratelimit, multi_submit_t *pMultiSub, smsg_t *pMsg)
 			CHKiRet(submitMsg2(pMsg));
 	} else {
 		localRet = ratelimitMsg(ratelimit, pMsg, &repMsg);
+dbgprintf("RRRRRR: localRet %d\n", localRet);
 		if(repMsg != NULL) {
 			pMultiSub->ppMsgs[pMultiSub->nElem++] = repMsg;
 			if(pMultiSub->nElem == pMultiSub->maxElem)
@@ -268,6 +271,8 @@ ratelimitAddMsg(ratelimit_t *ratelimit, multi_submit_t *pMultiSub, smsg_t *pMsg)
 			pMultiSub->ppMsgs[pMultiSub->nElem++] = pMsg;
 			if(pMultiSub->nElem == pMultiSub->maxElem)
 				CHKiRet(multiSubmitMsg2(pMultiSub));
+		//} else if(localRet == RS_RET_DISCARDMSG) { /////
+			//msgDestruct(&pMsg); /////
 		}
 	}
 

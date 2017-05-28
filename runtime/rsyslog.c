@@ -91,7 +91,8 @@ int default_thr_sched_policy;
 
 /* globally visible static data - see comment in rsyslog.h for details */
 uchar *glblModPath; /* module load path */
-void (*glblErrLogger)(const int, const int, const uchar*) = dfltErrLogger; /* the error logger to use by the errmsg module */
+void (*glblErrLogger)(const int, const int, const uchar*) = dfltErrLogger;
+/* the error logger to use by the errmsg module */
 
 /* static data */
 static int iRefCount = 0; /* our refcount - it MUST exist only once inside a process (not thread)
@@ -140,7 +141,7 @@ rsrtInit(const char **ppErrObj, obj_if_t *pObjIF)
 		/* init runtime only if not yet done */
 #ifdef HAVE_LIBLOGGING_STDLOG
 		stdlog_init(0);
-		stdlog_hdl = NULL;
+		stdlog_hdl = stdlog_open("rsyslogd", 0, STDLOG_SYSLOG, NULL);
 #endif
 		CHKiRet(pthread_attr_init(&default_thread_attr));
 		pthread_attr_setstacksize(&default_thread_attr, 4096*1024);

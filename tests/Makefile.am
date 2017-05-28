@@ -22,12 +22,15 @@ TESTS = $(TESTRUNS)
 
 TESTS +=  \
 	empty-hostname.sh \
+	prop-programname.sh \
+	prop-programname-with-slashes.sh \
 	hostname-with-slash-pmrfc5424.sh \
 	hostname-with-slash-pmrfc3164.sh \
 	hostname-with-slash-dflt-invld.sh \
 	hostname-with-slash-dflt-slash-valid.sh \
 	stop-localvar.sh \
 	stop-msgvar.sh \
+	glbl-umask.sh \
 	glbl-unloadmodules.sh \
 	glbl-invld-param.sh \
 	glbl_setenv_2_vars.sh \
@@ -36,7 +39,9 @@ TESTS +=  \
 	glbl_setenv.sh \
 	invalid_nested_include.sh \
 	omfwd-keepalive.sh \
+	omfile-read-only-errmsg.sh \
 	omfile-read-only.sh \
+	omfile_both_files_set.sh \
 	msgvar-concurrency.sh \
 	localvar-concurrency.sh \
 	exec_tpl-concurrency.sh \
@@ -79,15 +84,25 @@ TESTS +=  \
 	timereported-utc-legacy.sh \
 	rawmsg-after-pri.sh \
 	rfc5424parser.sh \
+	pmrfc3164-msgFirstSpace.sh \
+	pmrfc3164-AtSignsInHostname.sh \
+	pmrfc3164-AtSignsInHostname_off.sh \
+	pmrfc3164-tagEndingByColon.sh \
+	pmrfc3164-defaultTag.sh \
 	tcp_forwarding_tpl.sh \
 	tcp_forwarding_dflt_tpl.sh \
 	tcp_forwarding_retries.sh \
 	arrayqueue.sh \
 	global_vars.sh \
+	no-parser-errmsg.sh \
 	da-mainmsg-q.sh \
 	validation-run.sh \
 	empty-ruleset.sh \
+	imtcp-discard-truncated-msg.sh \
 	imtcp-basic.sh \
+	imtcp-maxFrameSize.sh \
+	imtcp-msg-truncation-on-number.sh \
+	imtcp-msg-truncation-on-number2.sh \
 	imtcp-NUL.sh \
 	imtcp-NUL-rawmsg.sh \
 	imtcp-multiport.sh \
@@ -95,6 +110,7 @@ TESTS +=  \
 	daqueue-persist.sh \
 	daqueue-invld-qi.sh \
 	daqueue-dirty-shutdown.sh \
+	diskq-rfc5424.sh \
 	diskqueue.sh \
 	diskqueue-fsync.sh \
 	rulesetmultiqueue.sh \
@@ -178,6 +194,7 @@ TESTS +=  \
 	failover-no-basic.sh \
 	rcvr_fail_restore.sh \
 	rscript_contains.sh \
+	rscript_ipv42num.sh \
 	rscript_field.sh \
 	rscript_stop.sh \
 	rscript_stop2.sh \
@@ -187,6 +204,7 @@ TESTS +=  \
 	rscript_ruleset_call_indirect-basic.sh \
 	rscript_ruleset_call_indirect-var.sh \
 	rscript_ruleset_call_indirect-invld.sh \
+	rscript_set_unset_invalid_var.sh \
 	rscript_set_modify.sh \
 	rscript_unaffected_reset.sh \
 	rscript_replace_complex.sh \
@@ -206,6 +224,7 @@ TESTS +=  \
 	rscript_lt_var.sh \
 	rscript_ne.sh \
 	rscript_ne_var.sh \
+	rscript_num2ipv4.sh \
 	empty-prop-comparison.sh \
 	rs_optimizer_pri.sh \
 	cee_simple.sh \
@@ -225,8 +244,16 @@ TESTS +=  \
 	lookup_table_rscript_reload_without_stub.sh \
 	multiple_lookup_tables.sh
 
+if ENABLE_IP
+TESTS += \
+	tcp_forwarding_ns_tpl.sh
+endif
+
 if HAVE_VALGRIND
 TESTS +=  \
+	internal-errmsg-memleak.sh \
+	rscript_set_memleak-vg.sh \
+	no-parser-vg.sh \
 	discard-rptdmsg-vg.sh \
 	discard-allmark-vg.sh \
 	failover-basic-vg.sh \
@@ -301,9 +328,13 @@ endif
 endif
 
 if ENABLE_OMKAFKA
+if ENABLE_IMKAFKA
 if ENABLE_KAFKA_TESTS
-TESTS += \
-	omkafka_static.sh
+#TESTS += \
+# @alorbach: these tests do not work out. Please fix and re-enable.
+#	sndrcv_kafka.sh \
+#	sndrcv_kafka_multi.sh
+endif
 endif
 endif
 
@@ -372,6 +403,9 @@ if ENABLE_IMPTCP
 TESTS +=  \
 	manyptcp.sh \
 	imptcp_large.sh \
+	imptcp-connection-msg-disabled.sh \
+	imptcp-connection-msg-received.sh \
+	imptcp-discard-truncated-msg.sh \
 	imptcp_addtlframedelim.sh \
 	imptcp_conndrop.sh \
 	imptcp_no_octet_counted.sh \
@@ -431,7 +465,15 @@ endif
 
 if ENABLE_MMNORMALIZE
 TESTS += msgvar-concurrency-array.sh \
-	msgvar-concurrency-array-event.tags.sh
+	msgvar-concurrency-array-event.tags.sh \
+	mmnormalize_rule_from_string.sh \
+	mmnormalize_rule_from_array.sh \
+	mmnormalize_processing_test1.sh \
+	mmnormalize_processing_test2.sh \
+	mmnormalize_processing_test3.sh \
+	mmnormalize_processing_test4.sh
+endif
+
 if ENABLE_IMPTCP
 TESTS +=  \
 	mmnormalize_regex_defaulted.sh \
@@ -439,10 +481,10 @@ TESTS +=  \
 	mmnormalize_variable.sh \
 	mmnormalize_tokenized.sh
 endif
+
 if LOGNORM_REGEX_SUPPORTED
 TESTS += \
 	mmnormalize_regex.sh
-endif
 endif
 
 if ENABLE_MMJSONPARSE
@@ -452,6 +494,10 @@ TESTS += \
 if ENABLE_IMPTCP
 TESTS +=  \
 	mmjsonparse_simple.sh \
+	imptcp-oversize-message-display.sh \
+	imptcp-msg-truncation-on-number.sh \
+	imptcp-msg-truncation-on-number2.sh \
+	imptcp-maxFrameSize-parameter.sh \
 	mmjsonparse_cim.sh \
 	json_array_subscripting.sh \
 	json_array_looping.sh \
@@ -477,6 +523,10 @@ endif
 if ENABLE_MMDBLOOKUP
 TESTS += \
     mmdb.sh
+if HAVE_VALGRIND
+TESTS += \
+    mmdb-vg.sh
+endif
 endif
 
 if ENABLE_GNUTLS
@@ -502,10 +552,13 @@ endif
 
 if ENABLE_RELP
 TESTS += sndrcv_relp.sh \
-         sndrcv_relp_tls.sh \
          sndrcv_relp_dflt_pt.sh \
 	 imrelp-basic.sh \
 	 imrelp-manyconn.sh
+if ENABLE_GNUTLS
+TESTS += \
+         sndrcv_relp_tls.sh
+endif
 endif
 
 if ENABLE_OMUDPSPOOF
@@ -547,6 +600,11 @@ endif
 if ENABLE_IMFILE
 TESTS += \
 	imfile-basic.sh \
+	imfile-discard-truncated-line.sh \
+	imfile-truncate-line.sh \
+	imfile-file-not-found-error.sh \
+	imfile-fileNotFoundError-parameter.sh \
+	imfile-error-not-repeated.sh \
 	imfile-truncate.sh \
 	imfile-readmode2.sh \
 	imfile-readmode2-with-persists-data-during-stop.sh \
@@ -558,7 +616,11 @@ TESTS += \
 	imfile-endregex-timeout-polling.sh \
 	imfile-endregex-timeout.sh \
 	imfile-endregex-timeout-none.sh \
-	imfile-persist-state-1.sh
+	imfile-persist-state-1.sh \
+	imfile-wildcards.sh \
+	imfile-wildcards-dirs.sh \
+	imfile-wildcards-dirs2.sh \
+	imfile-wildcards-dirs-multi.sh
 if HAVE_VALGRIND
 TESTS += \
 	imfile-basic-vg.sh \
@@ -579,11 +641,18 @@ DISTCLEANFILES=rsyslog.pid
 test_files = testbench.h runtime-dummy.c
 
 EXTRA_DIST= \
+	internal-errmsg-memleak.sh \
 	empty-hostname.sh \
 	hostname-with-slash-pmrfc5424.sh \
 	hostname-with-slash-pmrfc3164.sh \
+	pmrfc3164-msgFirstSpace.sh \
+	pmrfc3164-AtSignsInHostname.sh \
+	pmrfc3164-AtSignsInHostname_off.sh \
+	pmrfc3164-tagEndingByColon.sh \
+	pmrfc3164-defaultTag.sh \
 	hostname-with-slash-dflt-invld.sh \
 	hostname-with-slash-dflt-slash-valid.sh \
+	glbl-umask.sh \
 	glbl-unloadmodules.sh \
 	glbl-invld-param.sh \
 	glbl_setenv_2_vars.sh \
@@ -685,7 +754,9 @@ EXTRA_DIST= \
 	testsuites/1.omod-if-array \
 	testsuites/1.field1 \
 	tcp_forwarding_tpl.sh \
+	tcp_forwarding_ns_tpl.sh \
 	testsuites/tcp_forwarding_tpl.conf \
+	testsuites/tcp_forwarding_ns_tpl.conf \
 	tcp_forwarding_dflt_tpl.sh \
 	testsuites/tcp_forwarding_dflt_tpl.conf \
 	tcp_forwarding_retries.sh \
@@ -694,12 +765,14 @@ EXTRA_DIST= \
 	fieldtest.sh \
 	rsf_getenv.sh \
 	testsuites/rsf_getenv.conf \
+	diskq-rfc5424.sh \
 	diskqueue.sh \
 	testsuites/diskqueue.conf \
 	arrayqueue.sh \
 	testsuites/arrayqueue.conf \
 	rscript_contains.sh \
 	testsuites/rscript_contains.conf \
+	rscript_ipv42num.sh \
 	rscript_field.sh \
 	rscript_field-vg.sh \
 	testsuites/rscript_field.conf \
@@ -728,11 +801,14 @@ EXTRA_DIST= \
 	rscript_ne.sh \
 	testsuites/rscript_ne.conf \
 	rscript_ne_var.sh \
+	rscript_num2ipv4.sh \
 	testsuites/rscript_ne_var.conf \
 	rscript_eq.sh \
 	testsuites/rscript_eq.conf \
 	rscript_eq_var.sh \
 	testsuites/rscript_eq_var.conf \
+	rscript_set_memleak-vg.sh \
+	rscript_set_unset_invalid_var.sh \
 	rscript_set_modify.sh \
 	testsuites/rscript_set_modify.conf \
 	testsuites/rscript_unaffected_reset.conf \
@@ -741,7 +817,9 @@ EXTRA_DIST= \
 	stop-msgvar.sh \
 	testsuites/stop-msgvar.conf \
 	omfwd-keepalive.sh \
+	omfile-read-only-errmsg.sh \
 	omfile-read-only.sh \
+	omfile_both_files_set.sh \
 	msgvar-concurrency.sh \
 	testsuites/msgvar-concurrency.conf \
 	msgvar-concurrency-array.sh \
@@ -756,8 +834,13 @@ EXTRA_DIST= \
 	testsuites/exec_tpl-concurrency.conf \
 	prop-all-json-concurrency.sh \
 	testsuites/prop-all-json-concurrency.conf \
+	no-parser-errmsg.sh \
 	global_vars.sh \
 	testsuites/global_vars.conf \
+	no-parser-errmsg.sh \
+	no-parser-vg.sh \
+	prop-programname.sh \
+	prop-programname-with-slashes.sh \
 	rfc5424parser.sh \
 	testsuites/rfc5424parser.conf \
 	privdrop_common.sh \
@@ -820,8 +903,15 @@ EXTRA_DIST= \
 	timereported-utc-legacy.sh \
 	timereported-utc-vg.sh \
 	mmrm1stspace-basic.sh \
+	mmnormalize_rule_from_string.sh \
+	mmnormalize_rule_from_array.sh \
 	pmnull-basic.sh \
 	pmnull-withparams.sh \
+	testsuites/mmnormalize_processing_tests.rulebase \
+	mmnormalize_processing_test1.sh \
+	mmnormalize_processing_test2.sh \
+	mmnormalize_processing_test3.sh \
+	mmnormalize_processing_test4.sh \
 	rawmsg-after-pri.sh \
 	testsuites/rawmsg-after-pri.conf \
 	rs_optimizer_pri.sh \
@@ -842,12 +932,18 @@ EXTRA_DIST= \
 	mmjsonparse-w-o-cookie.sh \
 	mmjsonparse-w-o-cookie-multi-spaces.sh \
 	mmjsonparse_simple.sh \
+	imptcp-oversize-message-display.sh \
+	imptcp-msg-truncation-on-number.sh \
+	imptcp-msg-truncation-on-number2.sh \
+	imptcp-maxFrameSize-parameter.sh \
 	testsuites/mmjsonparse_simple.conf \
 	mmjsonparse_cim.sh \
 	testsuites/mmjsonparse_cim.conf \
 	mmdb.sh \
+	mmdb.rb \
 	test.mmdb \
 	testsuites/mmdb.conf \
+	mmdb-vg.sh \
 	incltest.sh \
 	testsuites/incltest.conf \
 	incltest_dir.sh \
@@ -885,7 +981,11 @@ EXTRA_DIST= \
 	testsuites/diskqueue-fsync.conf \
 	empty-ruleset.sh \
 	testsuites/empty-ruleset.conf \
+	imtcp-discard-truncated-msg.sh \
 	imtcp-basic.sh \
+	imtcp-maxFrameSize.sh \
+	imtcp-msg-truncation-on-number.sh \
+	imtcp-msg-truncation-on-number2.sh \
 	imtcp-NUL.sh \
 	imtcp-NUL-rawmsg.sh \
 	imtcp-tls-basic.sh \
@@ -907,6 +1007,9 @@ EXTRA_DIST= \
 	imptcp-NUL.sh \
 	imptcp-NUL-rawmsg.sh \
 	imptcp_large.sh \
+	imptcp-connection-msg-disabled.sh \
+	imptcp-connection-msg-received.sh \
+	imptcp-discard-truncated-msg.sh \
 	testsuites/imptcp_large.conf \
 	imptcp_addtlframedelim.sh \
 	testsuites/imptcp_addtlframedelim.conf \
@@ -1101,6 +1204,11 @@ EXTRA_DIST= \
 	imfile-endregex-vg.sh \
 	testsuites/imfile-endregex.conf \
 	imfile-basic.sh \
+	imfile-discard-truncated-line.sh \
+	imfile-truncate-line.sh \
+	imfile-file-not-found-error.sh \
+	imfile-fileNotFoundError-parameter.sh \
+	imfile-error-not-repeated.sh \
 	imfile-basic-vg.sh \
 	testsuites/imfile-basic.conf \
 	imfile-endregex-timeout-none-polling.sh \
@@ -1109,6 +1217,13 @@ EXTRA_DIST= \
 	imfile-endregex-timeout-none.sh \
 	imfile-persist-state-1.sh \
 	imfile-truncate.sh \
+	imfile-wildcards.sh \
+	imfile-wildcards-dirs.sh \
+	imfile-wildcards-dirs2.sh \
+	imfile-wildcards-dirs-multi.sh \
+	testsuites/imfile-wildcards.conf \
+	testsuites/imfile-wildcards-dirs.conf \
+	testsuites/imfile-wildcards-dirs-multi.conf \
 	dynfile_invld_async.sh \
 	dynfile_invld_sync.sh \
 	dynfile_cachemiss.sh \
@@ -1209,10 +1324,14 @@ EXTRA_DIST= \
 	mysql-actq-mt-withpause.sh \
 	mysql-actq-mt-withpause-vg.sh \
 	testsuites/mysql-actq-mt.conf \
+	sndrcv_kafka.sh \
+	sndrcv_kafka_multi.sh \
 	testsuites/kafka-server.properties \
 	testsuites/zoo.cfg \
 	omkafka_static.sh \
 	testsuites/omkafka_static.conf \
+	omkafka_multiple.sh \
+	testsuites/omkafka_multiple.conf \
 	mmpstrucdata.sh \
 	mmpstrucdata-vg.sh \
 	testsuites/mmpstrucdata.conf \
@@ -1376,6 +1495,7 @@ EXTRA_DIST= \
 	imptcp_nonProcessingPoller.sh \
 	imptcp_veryLargeOctateCountedMessages.sh \
 	testsuites/imptcp_nonProcessingPoller.conf \
+	libmaxmindb.supp \
 	travis/trusty.supp \
 	json_var_case.sh \
 	testsuites/json_var_case.conf \
@@ -1412,8 +1532,9 @@ uxsockrcvr_SOURCES = uxsockrcvr.c
 uxsockrcvr_LDADD = $(SOL_LIBS)
 
 tcpflood_SOURCES = tcpflood.c
-tcpflood_CPPFLAGS = $(PTHREADS_CFLAGS) $(GNUTLS_CFLAGS) $(RELP_CFLAGS)
-tcpflood_LDADD = $(SOL_LIBS) $(PTHREADS_LIBS) $(GNUTLS_LIBS) $(RELP_LIBS)
+tcpflood_CFLAGS = $(PTHREADS_CFLAGS) $(RELP_CFLAGS) $(GNUTLS_CFLAGS)
+tcpflood_CPPFLAGS = $(PTHREADS_CFLAGS) $(RELP_CFLAGS) $(GNUTLS_CFLAGS)
+tcpflood_LDADD = $(SOL_LIBS) $(PTHREADS_LIBS) $(RELP_LIBS) $(GNUTLS_LIBS)
 if ENABLE_GNUTLS
 tcpflood_LDADD += -lgcrypt
 endif

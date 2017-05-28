@@ -84,9 +84,10 @@ loadDrvr(nssel_t *pThis)
 
 finalize_it:
 	if(iRet != RS_RET_OK) {
-		if(pThis->pDrvrName != NULL)
+		if(pThis->pDrvrName != NULL) {
 			free(pThis->pDrvrName);
 			pThis->pDrvrName = NULL;
+		}
 	}
 	RETiRet;
 }
@@ -192,7 +193,8 @@ Wait(nssel_t *pThis, int *piNumReady)
  * rgerhards, 2008-04-23
  */
 static rsRetVal
-IsReady(nssel_t *pThis, netstrm_t *pStrm, nsdsel_waitOp_t waitOp, int *pbIsReady, int __attribute__((unused)) *piNumReady)
+IsReady(nssel_t *pThis, netstrm_t *pStrm, nsdsel_waitOp_t waitOp, int *pbIsReady,
+int __attribute__((unused)) *piNumReady)
 {
 	DEFiRet;
 	ISOBJ_TYPE_assert(pThis, nssel);

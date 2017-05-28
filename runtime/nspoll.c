@@ -79,9 +79,10 @@ loadDrvr(nspoll_t *pThis)
 
 finalize_it:
 	if(iRet != RS_RET_OK) {
-		if(pThis->pDrvrName != NULL)
+		if(pThis->pDrvrName != NULL) {
 			free(pThis->pDrvrName);
 			pThis->pDrvrName = NULL;
+		}
 	}
 	RETiRet;
 }
@@ -144,7 +145,7 @@ static rsRetVal
 SetDrvrName(nspoll_t *pThis, uchar *pszName)
 {
 	DEFiRet;
-	ISOBJ_TYPE_assert(pThis, netstrms);
+	ISOBJ_TYPE_assert(pThis, nspoll);
 	if(pThis->pBaseDrvrName != NULL) {
 		free(pThis->pBaseDrvrName);
 		pThis->pBaseDrvrName = NULL;

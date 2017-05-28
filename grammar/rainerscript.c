@@ -1276,6 +1276,13 @@ str2num(es_str_t *s, int *bSuccess)
 	int64_t num = 0;
 	const uchar *const c = es_getBufAddr(s);
 
+	if(s->lenStr == 0) {
+		DBGPRINTF("rainerscript: str2num: strlen == 0; invalid input (no string)\n");
+		if(bSuccess != NULL) {
+			*bSuccess = 1;
+		}
+		goto done;
+	}
 	if(c[0] == '-') {
 		neg = -1;
 		i = -1;
@@ -1290,6 +1297,7 @@ str2num(es_str_t *s, int *bSuccess)
 	num *= neg;
 	if(bSuccess != NULL)
 		*bSuccess = (i == s->lenStr) ? 1 : 0;
+done:
 	return num;
 }
 
@@ -1606,7 +1614,8 @@ doFunc_exec_template(struct cnffunc *__restrict__ const func,
 }
 
 static es_str_t*
-doFuncReplace(struct svar *__restrict__ const operandVal, struct svar *__restrict__ const findVal, struct svar *__restrict__ const replaceWithVal) {
+doFuncReplace(struct svar *__restrict__ const operandVal, struct svar *__restrict__ const findVal,
+	struct svar *__restrict__ const replaceWithVal) {
     int freeOperand, freeFind, freeReplacement;
     es_str_t *str = var2String(operandVal, &freeOperand);
     es_str_t *findStr = var2String(findVal, &freeFind);
@@ -1663,7 +1672,8 @@ doFuncReplace(struct svar *__restrict__ const operandVal, struct svar *__restric
 }
 
 static es_str_t*
-doFuncWrap(struct svar *__restrict__ const sourceVal, struct svar *__restrict__ const wrapperVal, struct svar *__restrict__ const escaperVal) {
+doFuncWrap(struct svar *__restrict__ const sourceVal, struct svar *__restrict__ const wrapperVal,
+	struct svar *__restrict__ const escaperVal) {
     int freeSource, freeWrapper;
     es_str_t *sourceStr;
     if (escaperVal) {
@@ -1704,11 +1714,119 @@ doRandomGen(struct svar *__restrict__ const sourceVal) {
 	long int x = randomNumber();
 	if (max > MAX_RANDOM_NUMBER) {
 		DBGPRINTF("rainerscript: desired random-number range [0 - %lld] "
-			"is wider than supported limit of [0 - %d)",
+			"is wider than supported limit of [0 - %d)\n",
 			max, MAX_RANDOM_NUMBER);
 	}
 	return x % max;
 }
+
+
+static long long
+ipv42num(char *str)
+{
+	unsigned num[4] = {0, 0, 0, 0};
+	long long value = -1;
+	size_t len = strlen(str);
+	int cyc = 0;
+	int prevdot = 0;
+	int startblank = 0;
+	int endblank = 0;
+	DBGPRINTF("rainerscript: (ipv42num) arg: '%s'\n", str);
+	for(unsigned int i = 0 ; i < len ; i++) {
+		switch(str[i]){
+		case '0':
+		case '1':
+		case '2':
+		case '3':
+		case '4':
+		case '5':
+		case '6':
+		case '7':
+		case '8':
+		case '9':
+			if(endblank == 1){
+				DBGPRINTF("rainerscript: (ipv42num) error: wrong IP-Address format (invalid space(1))\n");
+				goto done;
+			}
+			prevdot = 0;
+			startblank = 0;
+			DBGPRINTF("rainerscript: (ipv42num) cycle: %d\n", cyc);
+			num[cyc] = num[cyc]*10+(str[i]-'0');
+			break;
+		case ' ':
+			prevdot = 0;
+			if(i == 0 || startblank == 1){
+				startblank = 1;
+				break;
+			}
+			else{
+				endblank = 1;
+				break;
+			}
+		case '.':
+			if(endblank == 1){
+				DBGPRINTF("rainerscript: (ipv42num) error: wrong IP-Address format (inalid space(2))\n");
+				goto done;
+			}
+			startblank = 0;
+			if(prevdot == 1){
+				DBGPRINTF("rainerscript: (ipv42num) error: wrong IP-Address format (two dots after one another)\n");
+				goto done;
+			}
+			prevdot = 1;
+			cyc++;
+			if(cyc > 3){
+				DBGPRINTF("rainerscript: (ipv42num) error: wrong IP-Address format (too many dots)\n");
+				goto done;
+			}
+			break;
+		default:
+			DBGPRINTF("rainerscript: (ipv42num) error: wrong IP-Address format (invalid charakter)\n");
+			goto done;
+		}
+	}
+	if(cyc != 3){
+		DBGPRINTF("rainerscript: (ipv42num) error: wrong IP-Address format (wrong number of dots)\n");
+		goto done;
+	}
+	value = num[0]*256*256*256+num[1]*256*256+num[2]*256+num[3];
+done:
+	DBGPRINTF("rainerscript: (ipv42num): return value:'%lld'\n",value);
+	return(value);
+}
+
+
+static es_str_t*
+num2ipv4(struct svar *__restrict__ const sourceVal) {
+	int success = 0;
+	int numip[4];
+	char str[16];
+	size_t len;
+	es_str_t *estr;
+	long long num = var2Number(sourceVal, &success);
+	DBGPRINTF("rainrescript: (num2ipv4) var2Number output: '%lld\n'", num);
+	if (! success) {
+		DBGPRINTF("rainerscript: (num2ipv4) couldn't access number\n");
+		len = snprintf(str, 16, "-1");
+		goto done;
+	}
+	if(num < 0 || num > 4294967295) {
+		DBGPRINTF("rainerscript: (num2ipv4) invalid number(too big/negative); does not represent IPv4 address\n");
+		len = snprintf(str, 16, "-1");
+		goto done;
+	}
+	for(int i = 0 ; i < 4 ; i++){
+		numip[i] = num % 256;
+		num = num / 256;
+	}
+	DBGPRINTF("rainerscript: (num2ipv4) Numbers: 1:'%d' 2:'%d' 3:'%d' 4:'%d'\n", numip[0], numip[1], numip[2], numip[3]);
+	len = snprintf(str, 16, "%d.%d.%d.%d", numip[3], numip[2], numip[1], numip[0]);
+done:
+	DBGPRINTF("rainerscript: (num2ipv4) ipv4-Address: %s, lengh: %zu\n", str, len);
+	estr = es_newStrFromCStr(str, len);
+	return(estr);
+}
+
 
 /* Perform a function call. This has been moved out of cnfExprEval in order
  * to keep the code small and easier to maintain.
@@ -1775,6 +1893,12 @@ doFuncCall(struct cnffunc *__restrict__ const func, struct svar *__restrict__ co
 		ret->datatype = 'N';
 		varFreeMembers(&r[0]);
 		break;
+	case CNFFUNC_NUM2IPV4:
+		cnfexprEval(func->expr[0], &r[0], usrptr);
+		ret->d.estr = num2ipv4(&r[0]);
+		ret->datatype = 'S';
+		varFreeMembers(&r[0]);
+		break;
 	case CNFFUNC_GETENV:
 		/* note: the optimizer shall have replaced calls to getenv()
 		 * with a constant argument to a single string (once obtained via
@@ -1813,6 +1937,15 @@ doFuncCall(struct cnffunc *__restrict__ const func, struct svar *__restrict__ co
 		ret->datatype = 'S';
 		ret->d.estr = estr;
 		varFreeMembers(&r[0]);
+		break;
+	case CNFFUNC_IPV42NUM:
+		cnfexprEval(func->expr[0], &r[0], usrptr);
+		str = (char*)var2CString(&r[0], &bMustFree);
+		ret->datatype = 'N';
+		ret->d.n = ipv42num(str);
+		varFreeMembers(&r[0]);
+		if(bMustFree)
+			free(str);
 		break;
 	case CNFFUNC_CNUM:
 		if(func->expr[0]->nodetype == 'N') {
@@ -3060,6 +3193,19 @@ cnfstmtNew(unsigned s_type)
 	return cnfstmt;
 }
 
+/* This function disables a cnfstmt by setting it to NOP. This is
+ * useful when we detect errors late in the parsing processing, where
+ * we need to return a valid cnfstmt. The optimizer later removes the
+ * NOPs, so all is well.
+ * NOTE: this call assumes that no dynamic data structures have been
+ * allocated. If so, these MUST be freed before calling cnfstmtDisable().
+ */
+static void
+cnfstmtDisable(struct cnfstmt *cnfstmt)
+{
+	cnfstmt->nodetype = S_NOP;
+}
+
 void cnfstmtDestructLst(struct cnfstmt *root);
 
 static void cnfIteratorDestruct(struct cnfitr *itr);
@@ -3164,11 +3310,22 @@ cnfIteratorDestruct(struct cnfitr *itr)
 struct cnfstmt *
 cnfstmtNewSet(char *var, struct cnfexpr *expr, int force_reset)
 {
+	propid_t propid;
 	struct cnfstmt* cnfstmt;
 	if((cnfstmt = cnfstmtNew(S_SET)) != NULL) {
-		cnfstmt->d.s_set.varname = (uchar*) var;
-		cnfstmt->d.s_set.expr = expr;
-		cnfstmt->d.s_set.force_reset = force_reset;
+		if(propNameToID((uchar *)var, &propid) == RS_RET_OK
+		   && (   propid == PROP_CEE
+		       || propid == PROP_LOCAL_VAR
+		       || propid == PROP_GLOBAL_VAR)
+		   ) {
+			cnfstmt->d.s_set.varname = (uchar*) var;
+			cnfstmt->d.s_set.expr = expr;
+			cnfstmt->d.s_set.force_reset = force_reset;
+		} else {
+			parser_errmsg("invalid variable '%s' in set statement.", var);
+			free(var);
+			cnfstmtDisable(cnfstmt);
+		}
 	}
 	return cnfstmt;
 }
@@ -3204,8 +3361,10 @@ cnfstmtNewReloadLookupTable(struct cnffparamlst *fparams)
 							  "expects a litteral string for second argument\n");
 				failed = 1;
 			}
-			if ((cnfstmt->d.s_reload_lookup_table.stub_value = (uchar*) es_str2cstr(((struct cnfstringval*)param->expr)->estr, NULL)) == NULL) {
-				parser_errmsg("statement ignored: reload_lookup_table statement failed to allocate memory for lookup-table stub-value\n");
+			if ((cnfstmt->d.s_reload_lookup_table.stub_value =
+			(uchar*) es_str2cstr(((struct cnfstringval*)param->expr)->estr, NULL)) == NULL) {
+				parser_errmsg("statement ignored: reload_lookup_table statement "
+				"failed to allocate memory for lookup-table stub-value\n");
 				failed = 1;
 			}
 		case 1:
@@ -3215,8 +3374,10 @@ cnfstmtNewReloadLookupTable(struct cnffparamlst *fparams)
 							  "expects a litteral string for first argument\n");
 				failed = 1;
 			}
-			if ((cnfstmt->d.s_reload_lookup_table.table_name = (uchar*) es_str2cstr(((struct cnfstringval*)param->expr)->estr, NULL)) == NULL) {
-				parser_errmsg("statement ignored: reload_lookup_table statement failed to allocate memory for lookup-table name\n");
+			if ((cnfstmt->d.s_reload_lookup_table.table_name =
+			(uchar*) es_str2cstr(((struct cnfstringval*)param->expr)->estr, NULL)) == NULL) {
+				parser_errmsg("statement ignored: reload_lookup_table statement "
+				"failed to allocate memory for lookup-table name\n");
 				failed = 1;
 			}
 			break;
@@ -3248,9 +3409,20 @@ cnfstmtNewReloadLookupTable(struct cnffparamlst *fparams)
 struct cnfstmt *
 cnfstmtNewUnset(char *var)
 {
+	propid_t propid;
 	struct cnfstmt* cnfstmt;
 	if((cnfstmt = cnfstmtNew(S_UNSET)) != NULL) {
-		cnfstmt->d.s_unset.varname = (uchar*) var;
+		if(propNameToID((uchar *)var, &propid) == RS_RET_OK
+		   && (   propid == PROP_CEE
+		       || propid == PROP_LOCAL_VAR
+		       || propid == PROP_GLOBAL_VAR)
+		   ) {
+			cnfstmt->d.s_unset.varname = (uchar*) var;
+		} else {
+			parser_errmsg("invalid variable '%s' in unset statement.", var);
+			free(var);
+			cnfstmtDisable(cnfstmt);
+		}
 	}
 	return cnfstmt;
 }
@@ -3958,12 +4130,16 @@ funcName2ID(es_str_t *fname, unsigned short nParams)
 		GENERATE_FUNC("strlen", 1, CNFFUNC_STRLEN);
 	} else if(FUNC_NAME("getenv")) {
 		GENERATE_FUNC("getenv", 1, CNFFUNC_GETENV);
+	} else if(FUNC_NAME("num2ipv4")) {
+		GENERATE_FUNC("num2ipv4", 1, CNFFUNC_NUM2IPV4);
 	} else if(FUNC_NAME("tolower")) {
 		GENERATE_FUNC("tolower", 1, CNFFUNC_TOLOWER);
 	} else if(FUNC_NAME("cstr")) {
 		GENERATE_FUNC("cstr", 1, CNFFUNC_CSTR);
 	} else if(FUNC_NAME("cnum")) {
 		GENERATE_FUNC("cnum", 1, CNFFUNC_CNUM);
+	} else if(FUNC_NAME("ip42num")) {
+		GENERATE_FUNC("ip42num", 1, CNFFUNC_IPV42NUM);
 	} else if(FUNC_NAME("re_match")) {
 		GENERATE_FUNC("re_match", 2, CNFFUNC_RE_MATCH);
 	} else if(FUNC_NAME("re_extract")) {
@@ -4152,7 +4328,8 @@ initFunc_dyn_stats(struct cnffunc *func)
 
 	func->funcdata = NULL;
 	if(func->expr[0]->nodetype != 'S') {
-		parser_errmsg("dyn-stats bucket-name (param 1) of dyn-stats manipulating functions like dyn_inc must be a constant string");
+		parser_errmsg("dyn-stats bucket-name (param 1) of dyn-stats manipulating "
+		"functions like dyn_inc must be a constant string");
 		FINALIZE;
 	}
 

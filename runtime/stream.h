@@ -107,7 +107,8 @@ typedef struct strm_s {
 	int iFileNumDigits;/* min number of digits to use in file number (only in circular mode) */
 	sbool bDeleteOnClose; /* set to 1 to auto-delete on close -- be careful with that setting! */
 	int64 iCurrOffs;/* current offset */
-	int64 *pUsrWCntr; /* NULL or a user-provided counter that receives the nbr of bytes written since the last CntrSet() */
+	int64 *pUsrWCntr; /* NULL or a user-provided counter that receives the nbr of bytes written since
+	the last CntrSet() */
 	sbool bPrevWasNL; /* used for readLine() when reading multi-line messages */
 	/* dynamic properties, valid only during file open, not to be persistet */
 	sbool bDisabled; /* should file no longer be written to? (currently set only if omfile file size limit fails) */
@@ -159,6 +160,9 @@ typedef struct strm_s {
 	sbool	bIsTTY;		/* is this a tty file? */
 	cstr_t *prevLineSegment; /* for ReadLine, previous, unprocessed part of file */
 	cstr_t *prevMsgSegment; /* for ReadMultiLine, previous, yet unprocessed part of msg */
+	int fileNotFoundError;
+	int noRepeatedErrorOutput; /* if a file is missing the Error is only given once */
+	int ignoringMsg;
 } strm_t;
 
 
@@ -174,6 +178,7 @@ BEGINinterface(strm) /* name must also be changed in ENDinterface macro! */
 	rsRetVal (*Write)(strm_t *const pThis, const uchar *const pBuf, size_t lenBuf);
 	rsRetVal (*WriteChar)(strm_t *pThis, uchar c);
 	rsRetVal (*WriteLong)(strm_t *pThis, long i);
+	rsRetVal (*SetFileNotFoundError)(strm_t *pThis, int pFileNotFoundError);
 	rsRetVal (*SetFName)(strm_t *pThis, uchar *pszPrefix, size_t iLenPrefix);
 	rsRetVal (*SetDir)(strm_t *pThis, uchar *pszDir, size_t iLenDir);
 	rsRetVal (*Flush)(strm_t *pThis);
@@ -217,7 +222,7 @@ ENDinterface(strm)
 /* prototypes */
 PROTOTYPEObjClassInit(strm);
 rsRetVal strmMultiFileSeek(strm_t *pThis, unsigned int fileNum, off64_t offs, off64_t *bytesDel);
-rsRetVal strmReadMultiLine(strm_t *pThis, cstr_t **ppCStr, regex_t *preg, sbool bEscapeLF);
+rsRetVal strmReadMultiLine(strm_t *pThis, cstr_t **ppCStr, regex_t *preg, sbool bEscapeLF, sbool discardTruncatedMsg, sbool msgDiscardingError);
 int strmReadMultiLine_isTimedOut(const strm_t *const __restrict__ pThis);
 void strmDebugOutBuf(const strm_t *const pThis);
 void strmSetReadTimeout(strm_t *const __restrict__ pThis, const int val);

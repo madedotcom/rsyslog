@@ -982,10 +982,10 @@ prepareDoActionParams(action_t * __restrict__ const pAction,
 					   &(pWrkrInfo->p.nontx.actParams[i]),
 					   ttNow));
 				break;
-			case ACT_ARRAY_PASSING:
-				CHKiRet(tplToArray(pAction->ppTpl[i], pMsg,
-					(uchar***) &(pWrkrInfo->p.nontx.actParams[i].param), ttNow));
-				break;
+			/* note: ARRAY_PASSING mode has been removed in 8.26.0; if it
+			 * is ever needed again, it can be found in 8.25.0.
+			 * rgerhards 2017-03-06
+			 */
 			case ACT_MSG_PASSING:
 				pWrkrInfo->p.nontx.actParams[i].param = (void*) pMsg;
 				break;
@@ -1013,10 +1013,8 @@ finalize_it:
 void
 releaseDoActionParams(action_t *__restrict__ const pAction, wti_t *__restrict__ const pWti, int action_destruct)
 {
-	int jArr;
 	int j;
 	actWrkrInfo_t *__restrict__ pWrkrInfo;
-	uchar ***ppMsgs;
 
 	pWrkrInfo = &(pWti->actWrkrInfo[pAction->iActionNbr]);
 	for(j = 0 ; j < pAction->iNumTpls ; ++j) {
@@ -1028,24 +1026,9 @@ releaseDoActionParams(action_t *__restrict__ const pAction, wti_t *__restrict__ 
 		} else {
 			switch(pAction->peParamPassing[j]) {
 			case ACT_ARRAY_PASSING:
-
-				ppMsgs = (uchar***) pWrkrInfo->p.nontx.actParams[0].param;
-				/* if we every use array passing mode again, we need to check
-				 * this code. It hasn't been used since refactoring for v7.
-				 */
-				if(ppMsgs != NULL) {
-					if(((uchar**)ppMsgs)[j] != NULL) {
-						jArr = 0;
-						while(ppMsgs[j][jArr] != NULL) {
-							free(ppMsgs[j][jArr]);
-							ppMsgs[j][jArr] = NULL;
-							++jArr;
-						}
-						free(((uchar**)ppMsgs)[j]);
-						((uchar**)ppMsgs)[j] = NULL;
-					}
-				}
-				break;
+				LogError(0, RS_RET_ERR, "plugin error: no longer supported "
+					"ARRAY_PASSING mode is used (see action.c)");
+				return;
 			case ACT_JSON_PASSING:
 				json_object_put((struct json_object*)
 								pWrkrInfo->p.nontx.actParams[j].param);
@@ -1214,6 +1197,11 @@ doTransaction(action_t *__restrict__ const pThis, wti_t *__restrict__ const pWti
 			 */
 			iRet = actionProcessMessage(pThis,
 				&actParam(wrkrInfo->p.tx.iparams, pThis->iNumTpls, i, 0), pWti);
+			if(iRet != RS_RET_DEFER_COMMIT && iRet != RS_RET_PREVIOUS_COMMITTED &&
+			   iRet != RS_RET_OK)
+				--i; /* we need to re-submit */
+			DBGPRINTF("doTransaction: action %d, processing msg %d, result %d\n",
+			   pThis->iActionNbr, i,iRet);
 		}
 	}
 finalize_it:
@@ -1895,8 +1883,7 @@ addAction(action_t **ppAction, modInfo_t *pMod, void *pModData,
 
 		/* set parameter-passing mode */
 		if(iTplOpts & OMSR_TPL_AS_ARRAY) {
-			pAction->peParamPassing[i] = ACT_ARRAY_PASSING;
-			pAction->bNeedReleaseBatch = 1;
+			ABORT_FINALIZE(RS_RET_ERR);
 		} else if(iTplOpts & OMSR_TPL_AS_MSG) {
 			pAction->peParamPassing[i] = ACT_MSG_PASSING;
 			pAction->bUsesMsgPassingMode = 1;
@@ -2019,36 +2006,65 @@ rsRetVal actionClassInit(void)
 	CHKiRet(objUse(ruleset, CORE_COMPONENT));
 
 	CHKiRet(regCfSysLineHdlr((uchar *)"actionname", 0, eCmdHdlrGetWord, NULL, &cs.pszActionName, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuefilename", 0, eCmdHdlrGetWord, NULL, &cs.pszActionQFName, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuesize", 0, eCmdHdlrInt, NULL, &cs.iActionQueueSize, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionwriteallmarkmessages", 0, eCmdHdlrBinary, NULL, &cs.bActionWriteAllMarkMsgs, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuedequeuebatchsize", 0, eCmdHdlrInt, NULL, &cs.iActionQueueDeqBatchSize, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuemaxdiskspace", 0, eCmdHdlrSize, NULL, &cs.iActionQueMaxDiskSpace, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuehighwatermark", 0, eCmdHdlrInt, NULL, &cs.iActionQHighWtrMark, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuelowwatermark", 0, eCmdHdlrInt, NULL, &cs.iActionQLowWtrMark, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuediscardmark", 0, eCmdHdlrInt, NULL, &cs.iActionQDiscardMark, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuediscardseverity", 0, eCmdHdlrInt, NULL, &cs.iActionQDiscardSeverity, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuecheckpointinterval", 0, eCmdHdlrInt, NULL, &cs.iActionQPersistUpdCnt, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuesyncqueuefiles", 0, eCmdHdlrBinary, NULL, &cs.bActionQSyncQeueFiles, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuefilename", 0, eCmdHdlrGetWord, NULL,
+		&cs.pszActionQFName, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuesize", 0, eCmdHdlrInt, NULL, &cs.iActionQueueSize,
+		NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionwriteallmarkmessages", 0, eCmdHdlrBinary, NULL,
+		&cs.bActionWriteAllMarkMsgs, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuedequeuebatchsize", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQueueDeqBatchSize, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuemaxdiskspace", 0, eCmdHdlrSize, NULL,
+		&cs.iActionQueMaxDiskSpace, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuehighwatermark", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQHighWtrMark, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuelowwatermark", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQLowWtrMark, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuediscardmark", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQDiscardMark, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuediscardseverity", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQDiscardSeverity, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuecheckpointinterval", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQPersistUpdCnt, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuesyncqueuefiles", 0, eCmdHdlrBinary, NULL,
+		&cs.bActionQSyncQeueFiles, NULL));
 	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuetype", 0, eCmdHdlrGetWord, setActionQueType, NULL, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueueworkerthreads", 0, eCmdHdlrInt, NULL, &cs.iActionQueueNumWorkers, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuetimeoutshutdown", 0, eCmdHdlrInt, NULL, &cs.iActionQtoQShutdown, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuetimeoutactioncompletion", 0, eCmdHdlrInt, NULL, &cs.iActionQtoActShutdown, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuetimeoutenqueue", 0, eCmdHdlrInt, NULL, &cs.iActionQtoEnq, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueueworkertimeoutthreadshutdown", 0, eCmdHdlrInt, NULL, &cs.iActionQtoWrkShutdown, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueueworkerthreadminimummessages", 0, eCmdHdlrInt, NULL, &cs.iActionQWrkMinMsgs, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuemaxfilesize", 0, eCmdHdlrSize, NULL, &cs.iActionQueMaxFileSize, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuesaveonshutdown", 0, eCmdHdlrBinary, NULL, &cs.bActionQSaveOnShutdown, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuedequeueslowdown", 0, eCmdHdlrInt, NULL, &cs.iActionQueueDeqSlowdown, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuedequeuetimebegin", 0, eCmdHdlrInt, NULL, &cs.iActionQueueDeqtWinFromHr, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuedequeuetimeend", 0, eCmdHdlrInt, NULL, &cs.iActionQueueDeqtWinToHr, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionexeconlyeverynthtime", 0, eCmdHdlrInt, NULL, &cs.iActExecEveryNthOccur, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionexeconlyeverynthtimetimeout", 0, eCmdHdlrInt, NULL, &cs.iActExecEveryNthOccurTO, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionexeconlyonceeveryinterval", 0, eCmdHdlrInt, NULL, &cs.iActExecOnceInterval, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"repeatedmsgcontainsoriginalmsg", 0, eCmdHdlrBinary, NULL, &cs.bActionRepMsgHasMsg, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionexeconlywhenpreviousissuspended", 0, eCmdHdlrBinary, NULL, &cs.bActExecWhenPrevSusp, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"actionresumeretrycount", 0, eCmdHdlrInt, NULL, &cs.glbliActionResumeRetryCount, NULL));
-	CHKiRet(regCfSysLineHdlr((uchar *)"resetconfigvariables", 1, eCmdHdlrCustomHandler, resetConfigVariables, NULL, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueueworkerthreads", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQueueNumWorkers, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuetimeoutshutdown", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQtoQShutdown, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuetimeoutactioncompletion", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQtoActShutdown, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuetimeoutenqueue", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQtoEnq, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueueworkertimeoutthreadshutdown", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQtoWrkShutdown, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueueworkerthreadminimummessages", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQWrkMinMsgs, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuemaxfilesize", 0, eCmdHdlrSize, NULL,
+		&cs.iActionQueMaxFileSize, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuesaveonshutdown", 0, eCmdHdlrBinary, NULL,
+		&cs.bActionQSaveOnShutdown, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuedequeueslowdown", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQueueDeqSlowdown, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuedequeuetimebegin", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQueueDeqtWinFromHr, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionqueuedequeuetimeend", 0, eCmdHdlrInt, NULL,
+		&cs.iActionQueueDeqtWinToHr, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionexeconlyeverynthtime", 0, eCmdHdlrInt, NULL,
+		&cs.iActExecEveryNthOccur, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionexeconlyeverynthtimetimeout", 0, eCmdHdlrInt, NULL,
+		&cs.iActExecEveryNthOccurTO, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionexeconlyonceeveryinterval", 0, eCmdHdlrInt, NULL,
+		&cs.iActExecOnceInterval, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"repeatedmsgcontainsoriginalmsg", 0, eCmdHdlrBinary, NULL,
+		&cs.bActionRepMsgHasMsg, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionexeconlywhenpreviousissuspended", 0, eCmdHdlrBinary, NULL,
+		&cs.bActExecWhenPrevSusp, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"actionresumeretrycount", 0, eCmdHdlrInt, NULL,
+		&cs.glbliActionResumeRetryCount, NULL));
+	CHKiRet(regCfSysLineHdlr((uchar *)"resetconfigvariables", 1, eCmdHdlrCustomHandler,
+		resetConfigVariables, NULL, NULL));
 
 	initConfigVariables(); /* first-time init of config setings */
 

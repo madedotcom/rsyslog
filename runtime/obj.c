@@ -720,6 +720,10 @@ static rsRetVal objDeserializeTrailer(strm_t *pStrm)
 	NEXTC; if(c != '\n') ABORT_FINALIZE(RS_RET_INVALID_TRAILER);
 
 finalize_it:
+	if(Debug && iRet != RS_RET_OK) {
+		dbgprintf("objDeserializeTrailer fails with %d\n", iRet);
+	}
+
 	RETiRet;
 }
 
@@ -840,7 +844,8 @@ Deserialize(void *ppObj, uchar *pszTypeExpected, strm_t *pStrm, rsRetVal (*fFixu
 		}
 	} while(iRetLocal != RS_RET_OK);
 
-	if(rsCStrSzStrCmp(pstrID, pszTypeExpected, ustrlen(pszTypeExpected))) /* TODO: optimize strlen() - caller shall provide */
+	if(rsCStrSzStrCmp(pstrID, pszTypeExpected, ustrlen(pszTypeExpected)))
+	/* TODO: optimize strlen() - caller shall provide */
 		ABORT_FINALIZE(RS_RET_INVALID_OID);
 
 	CHKiRet(FindObjInfo((char*)cstrGetSzStrNoNULL(pstrID), &pObjInfo));
@@ -878,7 +883,9 @@ finalize_it:
  * rgerhards, 2012-11-03
  */
 rsRetVal
-objDeserializeWithMethods(void *ppObj, uchar *pszTypeExpected, int lenTypeExpected, strm_t *pStrm, rsRetVal (*fFixup)(obj_t*,void*), void *pUsr, rsRetVal (*objConstruct)(), rsRetVal (*objConstructFinalize)(), rsRetVal (*objDeserialize)())
+objDeserializeWithMethods(void *ppObj, uchar *pszTypeExpected, int lenTypeExpected, strm_t *pStrm,
+rsRetVal (*fFixup)(obj_t*,void*), void *pUsr, rsRetVal (*objConstruct)(), rsRetVal (*objConstructFinalize)(),
+rsRetVal (*objDeserialize)())
 {
 	DEFiRet;
 	rsRetVal iRetLocal;
@@ -934,6 +941,12 @@ finalize_it:
 
 	if(pstrID != NULL)
 		rsCStrDestruct(&pstrID);
+
+	if(Debug && iRet != RS_RET_OK) {
+		dbgprintf("objDeserializeWithMethods fails with %d, stream state:\n", iRet);
+		strmDebugOutBuf(pStrm);
+	}
+
 
 	RETiRet;
 }
@@ -1149,7 +1162,8 @@ RegisterObj(uchar *pszObjName, objInfo_t *pInfo)
 	if(i >= OBJ_NUM_IDS) ABORT_FINALIZE(RS_RET_OBJ_REGISTRY_OUT_OF_SPACE);
 
 	arrObjInfo[i] = pInfo;
-	/* DEV debug only: dbgprintf("object '%s' successfully registered with index %d, qIF %p\n", pszObjName, i, pInfo->QueryIF); */
+	/* DEV debug only: dbgprintf("object '%s' successfully registered with
+	index %d, qIF %p\n", pszObjName, i, pInfo->QueryIF); */
 
 finalize_it:
 	if(iRet != RS_RET_OK) {
@@ -1211,7 +1225,8 @@ UseObj(const char *srcFile, uchar *pObjName, uchar *pObjFile, interface_t *pIf)
 	objInfo_t *pObjInfo;
 
 
-	/* DEV debug only: dbgprintf("source file %s requests object '%s', ifIsLoaded %d\n", srcFile, pObjName, pIf->ifIsLoaded); */
+	/* DEV debug only: dbgprintf("source file %s requests object '%s',
+	ifIsLoaded %d\n", srcFile, pObjName, pIf->ifIsLoaded); */
 	pthread_mutex_lock(&mutObjGlobalOp);
 
 	if(pIf->ifIsLoaded == 1) {
@@ -1268,7 +1283,8 @@ ReleaseObj(const char *srcFile, uchar *pObjName, uchar *pObjFile, interface_t *p
 	DEFiRet;
 	objInfo_t *pObjInfo;
 
-	/* dev debug only dbgprintf("source file %s releasing object '%s', ifIsLoaded %d\n", srcFile, pObjName, pIf->ifIsLoaded); */
+	/* dev debug only dbgprintf("source file %s releasing object '%s',
+	ifIsLoaded %d\n", srcFile, pObjName, pIf->ifIsLoaded); */
 	pthread_mutex_lock(&mutObjGlobalOp);
 
 	if(pObjFile == NULL)

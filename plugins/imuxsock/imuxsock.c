@@ -6,7 +6,7 @@
  *
  * File begun on 2007-12-20 by RGerhards (extracted from syslogd.c)
  *
- * Copyright 2007-2016 Rainer Gerhards and Adiscon GmbH.
+ * Copyright 2007-2017 Rainer Gerhards and Adiscon GmbH.
  *
  * This file is part of rsyslog.
  *
@@ -428,7 +428,8 @@ addListner(instanceConf_t *inst)
 	listeners[nfd].flags = inst->bIgnoreTimestamp ? IGNDATE : NOFLAG;
 	listeners[nfd].bCreatePath = inst->bCreatePath;
 	listeners[nfd].sockName = ustrdup(inst->sockName);
-	listeners[nfd].bUseCreds = (inst->bDiscardOwnMsgs || inst->bWritePid || inst->ratelimitInterval || inst->bAnnotate || inst->bUseSysTimeStamp) ? 1 : 0;
+	listeners[nfd].bUseCreds = (inst->bDiscardOwnMsgs || inst->bWritePid || inst->ratelimitInterval
+	|| inst->bAnnotate || inst->bUseSysTimeStamp) ? 1 : 0;
 	listeners[nfd].bAnnotate = inst->bAnnotate;
 	listeners[nfd].bParseTrusted = inst->bParseTrusted;
 	listeners[nfd].bDiscardOwnMsgs = inst->bDiscardOwnMsgs;
@@ -593,7 +594,7 @@ findRatelimiter(lstn_t *pLstn, struct ucred *cred, ratelimit_t **prl)
 	ratelimit_t *rl = NULL;
 	int r;
 	pid_t *keybuf;
-	char pidbuf[256];
+	char pinfobuf[512];
 	DEFiRet;
 
 	if(cred == NULL)
@@ -615,10 +616,25 @@ findRatelimiter(lstn_t *pLstn, struct ucred *cred, ratelimit_t **prl)
 		DBGPRINTF("imuxsock: no ratelimiter for pid %lu, creating one\n",
 			  (unsigned long) cred->pid);
 		STATSCOUNTER_INC(ctrNumRatelimiters, mutCtrNumRatelimiters);
-		snprintf(pidbuf, sizeof(pidbuf), "pid %lu",
-			(unsigned long) cred->pid);
-		pidbuf[sizeof(pidbuf)-1] = '\0'; /* to be on safe side */
-		CHKiRet(ratelimitNew(&rl, "imuxsock", pidbuf));
+		/* read process name from system  */
+		char procName[256]; /* enough for any sane process name  */
+		snprintf(procName, sizeof(procName), "/proc/%lu/cmdline", (unsigned long) cred->pid);
+		FILE *f = fopen(procName, "r");
+		if (f) {
+			size_t len;
+			len = fread(procName, sizeof(char), 256, f);
+			if (len > 0) {
+				snprintf(pinfobuf, sizeof(pinfobuf), "pid: %lu, name: %s",
+					(unsigned long) cred->pid, procName);
+			}
+			fclose(f);
+		}
+		else {
+			snprintf(pinfobuf, sizeof(pinfobuf), "pid: %lu",
+				(unsigned long) cred->pid);
+		}
+		pinfobuf[sizeof(pinfobuf)-1] = '\0'; /* to be on safe side */
+		CHKiRet(ratelimitNew(&rl, "imuxsock", pinfobuf));
 		ratelimitSetLinuxLike(rl, pLstn->ratelimitInterval, pLstn->ratelimitBurst);
 		ratelimitSetSeverity(rl, pLstn->ratelimitSev);
 		CHKmalloc(keybuf = malloc(sizeof(pid_t)));
@@ -942,16 +958,18 @@ SubmitMsg(uchar *pRcv, int lenRcv, lstn_t *pLstn, struct ucred *cred, struct tim
 				}
 			} else {
 				if(datetime.ParseTIMESTAMP3339(&(pMsg->tTIMESTAMP), &parse, &lenMsg) != RS_RET_OK &&
-				   datetime.ParseTIMESTAMP3164(&(pMsg->tTIMESTAMP), &parse, &lenMsg, NO_PARSE3164_TZSTRING, NO_PERMIT_YEAR_AFTER_TIME) != RS_RET_OK) {
+				datetime.ParseTIMESTAMP3164(&(pMsg->tTIMESTAMP), &parse, &lenMsg,
+				NO_PARSE3164_TZSTRING, NO_PERMIT_YEAR_AFTER_TIME) != RS_RET_OK) {
 					DBGPRINTF("we have a problem, invalid timestamp in msg!\n");
 				}
 			}
 		} else { /* if we pulled the time from the system, we need to update the message text */
 			uchar *tmpParse = parse; /* just to check correctness of TS */
 			if(datetime.ParseTIMESTAMP3339(&dummyTS, &tmpParse, &lenMsg) == RS_RET_OK ||
-			   datetime.ParseTIMESTAMP3164(&dummyTS, &tmpParse, &lenMsg, NO_PARSE3164_TZSTRING, NO_PERMIT_YEAR_AFTER_TIME) == RS_RET_OK) {
-				/* We modify the message only if it contained a valid timestamp,
-				 * otherwise we do not touch it at all. */
+		 	datetime.ParseTIMESTAMP3164(&dummyTS, &tmpParse, &lenMsg, NO_PARSE3164_TZSTRING,
+			NO_PERMIT_YEAR_AFTER_TIME) == RS_RET_OK) {
+			/* We modify the message only if it contained a valid timestamp,
+			otherwise we do not touch it at all. */
 				datetime.formatTimestamp3164(&st, (char*)parse, 0);
 				parse[15] = ' '; /* re-write \0 from fromatTimestamp3164 by SP */
 				/* update "counters" to reflect processed timestamp */
@@ -1051,7 +1069,7 @@ static rsRetVal readSocket(lstn_t *pLstn)
 #endif
 	iRcvd = recvmsg(pLstn->fd, &msgh, MSG_DONTWAIT);
  
-	DBGPRINTF("Message from UNIX socket: #%d\n", pLstn->fd);
+	DBGPRINTF("Message from UNIX socket: #%d, size %d\n", pLstn->fd, (int) iRcvd);
 	if(iRcvd > 0) {
 		cred = NULL;
 		ts = NULL;
@@ -1131,7 +1149,9 @@ activateListeners(void)
 		listeners[0].ratelimitInterval = runModConf->ratelimitIntervalSysSock;
 		listeners[0].ratelimitBurst = runModConf->ratelimitBurstSysSock;
 		listeners[0].ratelimitSev = runModConf->ratelimitSeveritySysSock;
-		listeners[0].bUseCreds = (runModConf->bWritePidSysSock || runModConf->ratelimitIntervalSysSock || runModConf->bAnnotateSysSock || runModConf->bDiscardOwnMsgs || runModConf->bUseSysTimeStamp) ? 1 : 0;
+		listeners[0].bUseCreds = (runModConf->bWritePidSysSock || runModConf->ratelimitIntervalSysSock
+		|| runModConf->bAnnotateSysSock || runModConf->bDiscardOwnMsgs
+		|| runModConf->bUseSysTimeStamp) ? 1 : 0;
 		listeners[0].bWritePid = runModConf->bWritePidSysSock;
 		listeners[0].bAnnotate = runModConf->bAnnotateSysSock;
 		listeners[0].bParseTrusted = runModConf->bParseTrusted;

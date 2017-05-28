@@ -8,7 +8,7 @@
  * Please note that there currently is no glbl.c file as we do not yet
  * have any implementations.
  *
- * Copyright 2008-2016 Rainer Gerhards and Adiscon GmbH.
+ * Copyright 2008-2017 Rainer Gerhards and Adiscon GmbH.
  *
  * This file is part of the rsyslog runtime library.
  *
@@ -41,6 +41,7 @@
 
 extern pid_t glbl_ourpid;
 extern int bProcessInternalMessages;
+extern int bPermitSlashInProgramname;
 #ifdef HAVE_LIBLOGGING_STDLOG
 extern stdlog_channel_t stdlog_hdl;
 #endif
@@ -124,9 +125,10 @@ void glblProcessCnf(struct cnfobj *o);
 void glblProcessTimezone(struct cnfobj *o);
 void glblProcessMainQCnf(struct cnfobj *o);
 void glblDestructMainqCnfObj(void);
-void glblDoneLoadCnf(void);
+rsRetVal glblDoneLoadCnf(void);
 const uchar * glblGetWorkDirRaw(void);
 tzinfo_t* glblFindTimezoneInfo(char *id);
 int GetGnuTLSLoglevel(void);
+int glblGetMaxLine(void);
 
 #endif /* #ifndef GLBL_H_INCLUDED */
