@@ -25,6 +25,8 @@ typedef struct _instanceData {
   uchar *server;
   int port;
 
+  int mode;
+
   uchar *host;
   uchar *time;
   uchar *service;
@@ -54,6 +56,7 @@ static struct cnfparamdescr actpdescr[] = {
   { "metric", eCmdHdlrGetWord, 0 },
   { "host", eCmdHdlrGetWord, 0 },
   { "time", eCmdHdlrGetWord, 0 },
+  { "mode", eCmdHdlrGetWord, 0 },
 };
 
 static struct cnfparamblk actpblk = {
@@ -375,6 +378,46 @@ static void setServiceName(void **fields, const char* instanceName, int instance
     } 
 }
 
+static int buildSingleEvent(eventlist_t *next, json_object *root)
+{
+    struct json_object_iterator it;
+    struct json_object_iterator itEnd;
+    struct json_object *val;
+    enum json_type type;
+    const char* name = NULL;
+    int hasValues = 0;
+
+
+    dbgprintf("\nHandling single event.\n");
+    it = json_object_iter_begin(root);
+    itEnd = json_object_iter_end(root);
+
+    while( !json_object_iter_equal(&it, &itEnd) )
+    {
+       val = json_object_iter_peek_value(&it);
+       type = json_object_get_type(val);
+       name = json_object_iter_peek_name(&it);
+       dbgprintf("Handling key %s", name);
+       if(strcmp(name, "service") == 0 && type == json_type_string) {
+            setServiceName(next->fields, NULL, 0, json_object_get_string(val));
+            hasValues = 1;
+       }
+       else if(strcmp(name, "metric") == 0) {
+            setMetricFromJsonValue(val, next);
+            hasValues = 1;
+       }
+
+       json_object_iter_next(&it);
+    }
+
+    dbgprintf("Made it through the buildy thingy");
+    if(NULL != val) {
+        free(val);
+    }
+
+    return hasValues;
+}
+
 
 /* This is the function responsible for mapping a message to an eventlist_t. */
 static eventlist_t *
@@ -395,11 +438,13 @@ makeEventsFromMessage(smsg_t *msg, instanceData *cfg)
     int err;
     unsigned short hasValues;
 
+    dbgprintf("HERE IS THE MODE: %d\n", cfg->mode);
     // This is the simple case. If we have no json subtree
     // then we're only sending a single event, based on the fields
     // that are defined in the config.
     if (NULL == cfg->propSubtree)
     {
+        dbgprintf("THE SUBTREE IS NOT\n");
         list = eventlist_new();
         setFieldsFromConfig(list, msg, cfg);
         return list;
@@ -410,8 +455,33 @@ makeEventsFromMessage(smsg_t *msg, instanceData *cfg)
     err = msgGetJSONPropJSON(msg, cfg->propSubtree, &json);
     if (NULL == json || err != RS_RET_OK) 
     {
+        dbgprintf("THE SUBTREE IS NOT PARSEABLE\n");
         list = eventlist_new();
         setFieldsFromConfig(list, msg, cfg);
+        return list;
+    }
+
+    next = eventlist_new();
+    hasValues = 0;
+    
+    // If we're in single-event mode then try to pase the subtree as
+    // a single event.
+    if(cfg->mode == 0)
+    {
+
+        dbgprintf("THE MODE IS 0\n");
+        if(buildSingleEvent(next, json)) 
+        {
+          next->next = list;
+          list = next;
+        } 
+        else if (0 == hasValues) {
+          eventlist_free(next);
+        }
+
+        setFieldsFromConfig(list, msg, cfg);
+        free(json);
+    
         return list;
     }
 
@@ -436,8 +506,6 @@ makeEventsFromMessage(smsg_t *msg, instanceData *cfg)
     // because it makes it easier to structure the code.
     // If we get to the end of the function and haven't
     // put any data into it, we'll free it.
-    next = eventlist_new();
-    hasValues = 0;
     while( !json_object_iter_equal(&it, &itEnd) )
     {
        hasValues = 0;
@@ -497,6 +565,12 @@ static void copyIntField(eventlist_t *src, riemann_event_t *event, riemann_event
       riemann_event_set(event, field, *((int64_t*)src->fields[field]), RIEMANN_EVENT_FIELD_NONE);
 }
 
+static void copyFloatField(eventlist_t *src, riemann_event_t *event, riemann_event_field_t field)
+{
+    if( NULL != src->fields[field] )
+      riemann_event_set(event, field, *((double*)src->fields[field]), RIEMANN_EVENT_FIELD_NONE);
+}
+
 static riemann_message_t*
 serializeEvents(eventlist_t *root)
 {
@@ -521,7 +595,7 @@ serializeEvents(eventlist_t *root)
        events[i] = riemann_event_new();
        copyField(current, events[i], RIEMANN_EVENT_FIELD_HOST);
        copyField(current, events[i], RIEMANN_EVENT_FIELD_SERVICE);
-       copyIntField(current, events[i], RIEMANN_EVENT_FIELD_METRIC_D);
+       copyFloatField(current, events[i], RIEMANN_EVENT_FIELD_METRIC_D);
        copyIntField(current, events[i], RIEMANN_EVENT_FIELD_METRIC_S64);
        i ++;
        current = current->next;
@@ -634,8 +708,11 @@ CODESTARTnewActInst
 			pData->metric = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
    		} else if(!strcmp(actpblk.descr[i].name, "subtree")) {
 			pData->propSubtree = getPropertyDescriptor((uchar*)es_str2cstr(pvals[i].val.d.estr, NULL));
-		} 
- }
+		} else if (!strcmp(actpblk.descr[i].name, "mode")) {
+            pData->mode = strcmp ("single", es_str2cstr(pvals[i].val.d.estr, NULL));
+            dbgprintf("MODE = %d (%s)", pData->mode, es_str2cstr(pvals[i].val.d.estr, NULL));
+        }
+    }
     pData->propHost = getPropertyDescriptor(pData->host);
     pData->propService = getPropertyDescriptor(pData->service);
     pData->propMetric = getPropertyDescriptor(pData->metric);
