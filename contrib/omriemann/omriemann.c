@@ -33,6 +33,8 @@ typedef struct _instanceData {
   uchar *service;
   uchar *metric;
 
+  sbool includeall;
+
   msgPropDescr_t *propHost;
   msgPropDescr_t *propTime;
   msgPropDescr_t *propService;
@@ -58,6 +60,7 @@ static struct cnfparamdescr actpdescr[] = {
   { "host", eCmdHdlrGetWord, 0 },
   { "time", eCmdHdlrGetWord, 0 },
   { "mode", eCmdHdlrGetWord, 0 },
+  { "includeall", eCmdHdlrBinary, 0 },
 };
 
 static struct cnfparamblk actpblk = {
@@ -387,15 +390,18 @@ static void setServiceName(void **fields, const char* instanceName, int instance
     } 
 }
 
-static int buildSingleEvent(eventlist_t *next, json_object *root)
+static int buildSingleEvent(eventlist_t *next, json_object *root, sbool includeAll)
 {
     struct json_object_iterator it;
     struct json_object_iterator itEnd;
+    struct json_object_iterator attribsIt;
+    struct json_object_iterator attribsItEnd;
     struct json_object *val;
     struct json_object *tag;
     enum json_type type;
     const char* name = NULL;
     char ** tags;
+    riemann_attribute_t ** attributes;
     int hasValues = 0;
     int i = 0;
     int len = 0;
@@ -457,8 +463,24 @@ static int buildSingleEvent(eventlist_t *next, json_object *root)
                 }
             }
        }
+       else if (!strcmp(name, "attributes") && type == json_type_object) {
+           i = 0;
+           dbgprintf("Setting up some attributes, yo");
+           attributes = calloc(16, sizeof(riemann_attribute_t*)); 
+           attribsIt = json_object_iter_begin(val);
+           attribsItEnd = json_object_iter_end(val);
 
+           while (!json_object_iter_equal(&attribsIt, &attribsItEnd))
+           {
+               val = json_object_iter_peek_value(&attribsIt);
+               name = json_object_iter_peek_name(&attribsIt);
 
+               dbgprintf("Got an attribute named %s with value %s", name, json_object_get_string(val));
+               attributes[i ++] = riemann_attribute_create(name, json_object_get_string(val));
+               json_object_iter_next(&attribsIt);
+           }
+
+           next->fields[RIEMANN_EVENT_FIELD_ATTRIBUTES] = attributes;
        json_object_iter_next(&it);
     }
 
@@ -636,6 +658,7 @@ serializeEvents(eventlist_t *root)
     int num_events = 0;
     int i = 0, j = 0;
     char ** tags;
+    riemann_attribute_t **attribs;
     riemann_event_t **events;
     eventlist_t *current;
 
@@ -667,6 +690,14 @@ serializeEvents(eventlist_t *root)
                riemann_event_tag_add(events[i], tags[j++]);
            }
 
+       }
+
+       if(NULL != current->fields[RIEMANN_EVENT_FIELD_ATTRIBUTES]) {
+          j = 0;
+          attribs = (riemann_attribute_t **)current->fields[RIEMANN_EVENT_FIELD_ATTRIBUTES];
+          while (NULL != attribs[j]) {
+                riemann_event_attribute_add(events[i], attribs[j++]);
+          }
        }
 
        i ++;
@@ -776,6 +807,8 @@ CODESTARTnewActInst
 			pData->host = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
 		} else if(!strcmp(actpblk.descr[i].name, "time")) {
 			pData->time = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
+		} else if(!strcmp(actpblk.descr[i].name, "includeall")) {
+			pData->includeall = pvals[i].val.d.n;
 		} else if(!strcmp(actpblk.descr[i].name, "metric")) {
 			pData->metric = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
    		} else if(!strcmp(actpblk.descr[i].name, "subtree")) {
