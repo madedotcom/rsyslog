@@ -20,6 +20,7 @@ DEFobjCurrIf(errmsg)
 #define OMRIEMANN_FIELD_SERVICE 1
 #define OMRIEMANN_FIELD_METRIC 2
 #define FIELD_COUNT 13
+#define MAX_TAG_COUNT 16
 
 typedef struct _instanceData {
   uchar *server;
@@ -154,19 +155,27 @@ eventlist_new() {
 static void eventlist_free(eventlist_t *list)
 {
    eventlist_t *tmp;
-   int i;
+   int i = 0;
+   char** tags = (char**)list->fields[RIEMANN_EVENT_FIELD_TAGS];
 
+   if(NULL != tags)
+   {
+        while (NULL != tags[i]) {
+            dbgprintf("Freeing %s", tags[i]);
+            free(tags[i++]);
+        }
+   }
+   dbgprintf("\nBBBB\n");
    while (list != NULL)
    {
-
      for(i =0; i< FIELD_COUNT; i++) {
         if (list->fields[i] != NULL){
+        
            free(list->fields[i]);
         }
      }
 
       free(list->fields);
-
       tmp = list;
       list = list->next;
       free(tmp);
@@ -383,10 +392,13 @@ static int buildSingleEvent(eventlist_t *next, json_object *root)
     struct json_object_iterator it;
     struct json_object_iterator itEnd;
     struct json_object *val;
+    struct json_object *tag;
     enum json_type type;
     const char* name = NULL;
+    char ** tags;
     int hasValues = 0;
-
+    int i = 0;
+    int len = 0;
 
     dbgprintf("\nHandling single event.\n");
     it = json_object_iter_begin(root);
@@ -398,14 +410,54 @@ static int buildSingleEvent(eventlist_t *next, json_object *root)
        type = json_object_get_type(val);
        name = json_object_iter_peek_name(&it);
        dbgprintf("Handling key %s", name);
+
        if(strcmp(name, "service") == 0 && type == json_type_string) {
             setServiceName(next->fields, NULL, 0, json_object_get_string(val));
             hasValues = 1;
        }
-       else if(strcmp(name, "metric") == 0) {
+       else if(!strcmp(name, "metric")) {
             setMetricFromJsonValue(val, next);
             hasValues = 1;
        }
+       else if (!strcmp(name, "state")) {
+            next->fields[RIEMANN_EVENT_FIELD_STATE] = strdup(json_object_get_string(val));
+            hasValues = 1;
+       }
+       else if (!strcmp(name, "description")) {
+            next->fields[RIEMANN_EVENT_FIELD_DESCRIPTION] = strdup(json_object_get_string(val));
+            hasValues = 1;
+       }
+       else if (!strcmp(name, "host")) {
+            next->fields[RIEMANN_EVENT_FIELD_HOST] = strdup(json_object_get_string(val));
+            hasValues = 1;
+       }
+       else if (!strcmp(name, "ttl") && (type == json_type_double)) {
+            next->fields[RIEMANN_EVENT_FIELD_TTL] = calloc(1, sizeof(float));
+            *((float *)next->fields[RIEMANN_EVENT_FIELD_TTL]) = (float)json_object_get_double(val);
+       }
+       else if (!strcmp(name, "ttl") && (type == json_type_int)) {
+            next->fields[RIEMANN_EVENT_FIELD_TTL] = calloc(1, sizeof(float));
+            *((float *)next->fields[RIEMANN_EVENT_FIELD_TTL]) = (float)json_object_get_int(val);
+       }
+       else if (!strcmp(name, "tags") && type == json_type_array) {
+            tags = calloc(16, sizeof(char*));
+            len = json_object_array_length(val);
+            next->fields[RIEMANN_EVENT_FIELD_TAGS] = tags;
+
+            for(i = 0; i < len; i++)
+            {
+                dbgprintf("HERRO!\n");
+                tag = json_object_array_get_idx(val, i);
+                type = json_object_get_type(tag);
+                if (type == json_type_string) {
+                   tags[i] = strdup(json_object_get_string(tag)); 
+                   dbgprintf("Assigning tag %s", tags[i]);
+                } else {
+                   dbgprintf("Type is %d", type);
+                }
+            }
+       }
+
 
        json_object_iter_next(&it);
     }
@@ -565,10 +617,16 @@ static void copyIntField(eventlist_t *src, riemann_event_t *event, riemann_event
       riemann_event_set(event, field, *((int64_t*)src->fields[field]), RIEMANN_EVENT_FIELD_NONE);
 }
 
-static void copyFloatField(eventlist_t *src, riemann_event_t *event, riemann_event_field_t field)
+static void copyDoubleField(eventlist_t *src, riemann_event_t *event, riemann_event_field_t field)
 {
     if( NULL != src->fields[field] )
       riemann_event_set(event, field, *((double*)src->fields[field]), RIEMANN_EVENT_FIELD_NONE);
+}
+
+static void copyFloatField(eventlist_t *src, riemann_event_t *event, riemann_event_field_t field)
+{
+    if( NULL != src->fields[field] )
+      riemann_event_set(event, field, *((float*)src->fields[field]), RIEMANN_EVENT_FIELD_NONE);
 }
 
 static riemann_message_t*
@@ -576,7 +634,8 @@ serializeEvents(eventlist_t *root)
 {
     riemann_message_t *msg;
     int num_events = 0;
-    int i = 0;
+    int i = 0, j = 0;
+    char ** tags;
     riemann_event_t **events;
     eventlist_t *current;
 
@@ -595,8 +654,21 @@ serializeEvents(eventlist_t *root)
        events[i] = riemann_event_new();
        copyField(current, events[i], RIEMANN_EVENT_FIELD_HOST);
        copyField(current, events[i], RIEMANN_EVENT_FIELD_SERVICE);
-       copyFloatField(current, events[i], RIEMANN_EVENT_FIELD_METRIC_D);
+       copyField(current, events[i], RIEMANN_EVENT_FIELD_STATE);
+       copyField(current, events[i], RIEMANN_EVENT_FIELD_DESCRIPTION);
+       copyDoubleField(current, events[i], RIEMANN_EVENT_FIELD_METRIC_D);
+       copyFloatField(current, events[i], RIEMANN_EVENT_FIELD_TTL);
        copyIntField(current, events[i], RIEMANN_EVENT_FIELD_METRIC_S64);
+
+       if(NULL != current->fields[RIEMANN_EVENT_FIELD_TAGS]) {
+           tags = (char**)current->fields[RIEMANN_EVENT_FIELD_TAGS];
+
+           while (NULL != tags[j]) {
+               riemann_event_tag_add(events[i], tags[j++]);
+           }
+
+       }
+
        i ++;
        current = current->next;
     }
