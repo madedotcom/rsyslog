@@ -390,7 +390,7 @@ static void setServiceName(void **fields, const char* instanceName, int instance
     } 
 }
 
-static int buildSingleEvent(eventlist_t *next, json_object *root, sbool includeAll)
+static int buildSingleEvent(eventlist_t *next, json_object *root)
 {
     struct json_object_iterator it;
     struct json_object_iterator itEnd;
@@ -481,6 +481,7 @@ static int buildSingleEvent(eventlist_t *next, json_object *root, sbool includeA
            }
 
            next->fields[RIEMANN_EVENT_FIELD_ATTRIBUTES] = attributes;
+       }
        json_object_iter_next(&it);
     }
 
