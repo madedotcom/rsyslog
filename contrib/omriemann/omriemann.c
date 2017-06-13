@@ -819,8 +819,13 @@ getPropertyDescriptor(uchar *name)
     
     propid_t prop_id;
     msgPropDescr_t *prop = NULL;
-    propNameToID(name, &prop_id);
+
+    if (name == NULL) {
+        return NULL;
+    }
     
+    propNameToID(name, &prop_id);
+
     if (prop_id != PROP_INVALID) 
     {
        prop = calloc(1, sizeof(msgPropDescr_t));
@@ -840,6 +845,7 @@ setInstParamDefaults(instanceData *pData)
     pData->service = (uchar*) "programname";
     pData->metric = (uchar*) "1";
     pData->prefixLen = 0;
+    pData->description = NULL;
 }
 
 BEGINnewActInst
@@ -886,7 +892,9 @@ CODESTARTnewActInst
     pData->propHost = getPropertyDescriptor(pData->host);
     pData->propService = getPropertyDescriptor(pData->service);
     pData->propMetric = getPropertyDescriptor(pData->metric);
+    dbgprintf("1\n");
     pData->propDescription = getPropertyDescriptor(pData->description);
+    dbgprintf("2\n");
     pData->propTime = getPropertyDescriptor(pData->time);
 	
 	CODE_STD_STRING_REQUESTnewActInst(1);
