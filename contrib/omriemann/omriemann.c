@@ -231,7 +231,7 @@ static void readConfigValue (char **target, smsg_t *msg, short unsigned isMandat
            dbgprintf("Ho ho ho\n");
 
         // if this field is mandatory, then we'll assume that the configured value is a literal
-        } else if(isMandatory) {
+        } else if(NULL != cfgValue) {
           dbgprintf("field is mandatory, using literal value %s", cfgValue);
           *(char**)target = strdup((char *)cfgValue);
         }
