@@ -162,7 +162,8 @@ eventlist_new() {
    return result;
 }
 
-static void eventlist_free(eventlist_t *list)
+static void 
+eventlist_free(eventlist_t *list)
 {
    eventlist_t *tmp;
    int i = 0;
@@ -171,11 +172,9 @@ static void eventlist_free(eventlist_t *list)
    if(NULL != tags)
    {
         while (NULL != tags[i]) {
-            dbgprintf("Freeing %s", tags[i]);
             free(tags[i++]);
         }
    }
-   dbgprintf("\nBBBB\n");
    while (list != NULL)
    {
      for(i =0; i< FIELD_COUNT; i++) {
@@ -204,51 +203,50 @@ static void eventlist_free(eventlist_t *list)
  * either the literal value of the config key, or to 
  * the value of the resolved msgPropDescr_t.
  * 
- * We always call this function so that we can apply 
- * defaults to fields, which is why we check to make
- * certain the field hasn't already been set.
+ * We always call this function for every configurable
+ * field so that we can apply  defaults, which is why 
+ * we check to make certain the field hasn't already 
+ * been set.
  * * */
 
 
-static void readConfigValue (char **target, smsg_t *msg, short unsigned isMandatory, uchar *cfgValue, msgPropDescr_t *resolvedProperty) {
-         uchar *propValue; 
+static void 
+readConfigValue (char **target, smsg_t *msg, uchar *cfgValue, msgPropDescr_t *resolvedProperty) {
+        uchar *propValue; 
         short unsigned mustFree = 0; 
         rs_size_t propLen;
         propValue = NULL;
 
         // already set? Nothing to do.
         if(NULL != *target) {
-          dbgprintf("target is already set\n");
           return;
         }
-        // if we have a resolved property for this field, then everything is simple.
+        // if we have a resolved property for this field, use the property value
         if (NULL != resolvedProperty)
         {
            propValue = MsgGetProp(msg, NULL, resolvedProperty, &propLen, &mustFree, NULL);
-           dbgprintf("field is resolved, using property value %s", propValue);
            if( NULL != propValue)
               *(char**)target = strdup((char *)propValue);
-           dbgprintf("Ho ho ho\n");
 
-        // if this field is mandatory, then we'll assume that the configured value is a literal
+        // Otherwise, if the field has a value, treat it as a literal.
         } else if(NULL != cfgValue) {
-          dbgprintf("field is mandatory, using literal value %s", cfgValue);
           *(char**)target = strdup((char *)cfgValue);
         }
-        dbgprintf("Nothing is true, everything is permitted\n");
         if(mustFree)
             free(propValue);
 }
 
-static void setFieldFromConfig(void **event, smsg_t *msg,
-                short unsigned isMandatory, riemann_event_field_t field, 
-                uchar *cfgValue, msgPropDescr_t *resolvedProperty) {
+static void 
+setFieldFromConfig(void **event, smsg_t *msg,
+                riemann_event_field_t field, uchar *cfgValue, 
+                msgPropDescr_t *resolvedProperty) {
     
-        readConfigValue(&(event[field]), msg, isMandatory, cfgValue, resolvedProperty);
+        readConfigValue(&(event[field]), msg, cfgValue, resolvedProperty);
 }
 
 /* Parse a string and set either the metric_s64 or metric_d fields in the event*/
-static unsigned short setMetricFromString(const char* value, eventlist_t *event)
+static unsigned short 
+setMetricFromString(const char* value, eventlist_t *event)
 {
     double dValue;
     int64_t iValue;
@@ -286,7 +284,8 @@ static unsigned short setMetricFromString(const char* value, eventlist_t *event)
 }
 
 /* Parses a json rValue and sets the metric_s64 or metric_d fields */
-static unsigned short setMetricFromJsonValue(struct json_object *json, eventlist_t *event)
+static unsigned short 
+setMetricFromJsonValue(struct json_object *json, eventlist_t *event)
 {
         json_type type;
 
@@ -379,9 +378,9 @@ setMetricFromConfig(eventlist_t *event, smsg_t *msg, instanceData *cfg)
 static void 
 setFieldsFromConfig(eventlist_t *event, smsg_t *msg, instanceData *cfg)
 {
-    setFieldFromConfig(event->fields, msg, 1, RIEMANN_EVENT_FIELD_HOST, cfg->host, cfg->propHost);
-    setFieldFromConfig(event->fields, msg, 1, RIEMANN_EVENT_FIELD_SERVICE, cfg->service, cfg->propService);
-    setFieldFromConfig(event->fields, msg, 1, RIEMANN_EVENT_FIELD_DESCRIPTION, cfg->description, cfg->propDescription);
+    setFieldFromConfig(event->fields, msg, RIEMANN_EVENT_FIELD_HOST, cfg->host, cfg->propHost);
+    setFieldFromConfig(event->fields, msg, RIEMANN_EVENT_FIELD_SERVICE, cfg->service, cfg->propService);
+    setFieldFromConfig(event->fields, msg, RIEMANN_EVENT_FIELD_DESCRIPTION, cfg->description, cfg->propDescription);
     setMetricFromConfig(event, msg, cfg);
 }
 
@@ -389,53 +388,38 @@ setFieldsFromConfig(eventlist_t *event, smsg_t *msg, instanceData *cfg)
 /* If we receive an impstats message, we use this function to set the service according to the `name` field and they key of the metric.
  * eg: given the json data {name="action 0", processed=10, failed=2} we will send two events with 
  * the service names "action 0/processed" and "action 0/failed"
+ *
+ * This function also handles prefixing service names, eg. action(type="omriemann" prefix="foo") will yield metrics with service names
+ * `foo/$programname`
  */ 
-static void setServiceName(void **fields, const char* prefix, int prefixLen, const char* instanceName, int instanceNameLen, const char* metricName) {
+static void setServiceName(void **fields, const char* prefix, size_t prefixLen, const char* instanceName, size_t instanceNameLen, const char* metricName) {
     
     int serviceNameLen = 0;
     int offset = 0;
+    size_t metricNameLen = 0;
 
-    dbgprintf("THE CIMPILER IS NOT IGNORING YOU\n");
     if (instanceNameLen == 0 && prefixLen == 0) {
        fields[RIEMANN_EVENT_FIELD_SERVICE] = strdup(metricName);
     }
     else
     {
-        dbgprintf("NOT TODAY\n");
-        size_t metricNameLen = strlen(metricName);
+        metricNameLen = strlen(metricName);
 
-        if (prefixLen) {
-            serviceNameLen += (1 + prefixLen);
-        }
-        
-        dbgprintf("NOT TODAY\n");
-        if (instanceNameLen) {
-            serviceNameLen += (1 + instanceNameLen);
-        }
+        char* serviceName = malloc((prefixLen + instanceNameLen + metricNameLen) * sizeof(char));
 
-        dbgprintf("NOT TODAY\n");
-        serviceNameLen += metricNameLen;
-
-        char* serviceName = malloc(serviceNameLen * sizeof(char));
-
-        dbgprintf("NOT TODAY\n");
         if (prefixLen > 0) {
-            dbgprintf("COPYING PREFIX\n");
             strcpy(serviceName, prefix);
-            dbgprintf("APPENDING slash PREFIX\n");
             serviceName[prefixLen] = '/';
             offset = prefixLen + 1;
         }
         if (instanceNameLen > 0) {
-                dbgprintf("COPYING instancename");
             strcpy(serviceName + offset, instanceName);
-                dbgprintf("APPENDING instancename /");
             serviceName[offset + instanceNameLen] = '/'; 
             offset += (1 + instanceNameLen);
         }
-        dbgprintf("COCK AND bALLS FOR ALL\n");
-        strcpy(serviceName + offset, metricName);
-        dbgprintf("service name is %s", serviceName);
+        if (metricNameLen > 0) {
+                strcpy(serviceName + offset, metricName);
+        }
         fields[RIEMANN_EVENT_FIELD_SERVICE] = serviceName;
     } 
 }
@@ -444,19 +428,15 @@ static int buildSingleEvent(instanceData *cfg, eventlist_t *next, json_object *r
 {
     struct json_object_iterator it;
     struct json_object_iterator itEnd;
-    struct json_object_iterator attribsIt;
-    struct json_object_iterator attribsItEnd;
     struct json_object *val;
     struct json_object *tag;
     enum json_type type;
     const char* name = NULL;
     char ** tags;
-    riemann_attribute_t ** attributes;
     int hasValues = 0;
     int i = 0;
     int len = 0;
 
-    dbgprintf("\nHandling single event.\n");
     it = json_object_iter_begin(root);
     itEnd = json_object_iter_end(root);
 
@@ -465,7 +445,6 @@ static int buildSingleEvent(instanceData *cfg, eventlist_t *next, json_object *r
        val = json_object_iter_peek_value(&it);
        type = json_object_get_type(val);
        name = json_object_iter_peek_name(&it);
-       dbgprintf("Handling key %s", name);
 
        if(strcmp(name, "service") == 0 && type == json_type_string) {
             setServiceName(next->fields, cfg->prefix, cfg->prefixLen, NULL, 0, json_object_get_string(val));
@@ -496,36 +475,31 @@ static int buildSingleEvent(instanceData *cfg, eventlist_t *next, json_object *r
             *((float *)next->fields[RIEMANN_EVENT_FIELD_TTL]) = (float)json_object_get_int(val);
        }
        else if (!strcmp(name, "tags") && type == json_type_array) {
-            tags = calloc(16, sizeof(char*));
+            tags = calloc(MAX_TAG_COUNT, sizeof(char*));
             len = json_object_array_length(val);
             next->fields[RIEMANN_EVENT_FIELD_TAGS] = tags;
 
             for(i = 0; i < len; i++)
             {
-                dbgprintf("HERRO!\n");
                 tag = json_object_array_get_idx(val, i);
                 type = json_object_get_type(tag);
                 if (type == json_type_string) {
                    tags[i] = strdup(json_object_get_string(tag)); 
-                   dbgprintf("Assigning tag %s", tags[i]);
-                } else {
-                   dbgprintf("Type is %d", type);
-                }
+                } 
             }
        }
        else if (!strcmp(name, "attributes") && type == json_type_object) {
+           struct json_object_iterator attribsIt = json_object_iter_begin(val);;
+           struct json_object_iterator attribsItEnd = json_object_iter_end(val);
+           riemann_attribute_t ** attributes = calloc(MAX_TAG_COUNT, sizeof(riemann_attribute_t*)); 
+
            i = 0;
-           dbgprintf("Setting up some attributes, yo");
-           attributes = calloc(16, sizeof(riemann_attribute_t*)); 
-           attribsIt = json_object_iter_begin(val);
-           attribsItEnd = json_object_iter_end(val);
 
            while (!json_object_iter_equal(&attribsIt, &attribsItEnd))
            {
                val = json_object_iter_peek_value(&attribsIt);
                name = json_object_iter_peek_name(&attribsIt);
 
-               dbgprintf("Got an attribute named %s with value %s", name, json_object_get_string(val));
                attributes[i ++] = riemann_attribute_create(name, json_object_get_string(val));
                json_object_iter_next(&attribsIt);
            }
@@ -535,7 +509,6 @@ static int buildSingleEvent(instanceData *cfg, eventlist_t *next, json_object *r
        json_object_iter_next(&it);
     }
 
-    dbgprintf("Made it through the buildy thingy");
     if(NULL != val) {
         free(val);
     }
@@ -566,19 +539,14 @@ makeEventsFromMessage(smsg_t *msg, instanceData *cfg)
     next = eventlist_new();
     hasValues = 0;
 
-    dbgprintf("HERE IS THE MODE: %d\n", cfg->mode);
     // This is the simple case. If we have no json subtree
     // then we're only sending a single event, based on the fields
     // that are defined in the config.
     if (NULL == cfg->propSubtree)
     {
-        dbgprintf("THE SUBTREE IS NOT\n");
         readConfigValue(&name, msg, 1, cfg->service, cfg->propService); 
-        dbgprintf("THE nAME IS NOW %s\n", name);
         setServiceName(next->fields, cfg->prefix, cfg->prefixLen, instanceName, instanceNameLen, name);
-        dbgprintf("THE SUBTREE IS NOW\n");
         setFieldsFromConfig(next, msg, cfg);
-        dbgprintf("THE SUBTREE IS NEW\n");
         return next;
     }
 
@@ -587,7 +555,6 @@ makeEventsFromMessage(smsg_t *msg, instanceData *cfg)
     err = msgGetJSONPropJSON(msg, cfg->propSubtree, &json);
     if (NULL == json || err != RS_RET_OK) 
     {
-        dbgprintf("THE SUBTREE IS NOT PARSEABLE\n");
         list = eventlist_new();
         readConfigValue(&name, msg, 1, cfg->service, cfg->propService); 
         setServiceName(next->fields, cfg->prefix, cfg->prefixLen, instanceName, instanceNameLen, name);
@@ -601,7 +568,6 @@ makeEventsFromMessage(smsg_t *msg, instanceData *cfg)
     if(cfg->mode == 0)
     {
 
-        dbgprintf("THE MODE IS 0\n");
         if(buildSingleEvent(cfg, next, json)) 
         {
           next->next = list;
@@ -634,10 +600,6 @@ makeEventsFromMessage(smsg_t *msg, instanceData *cfg)
     it = json_object_iter_begin(json);
     itEnd = json_object_iter_end(json);
 
-    // We declare our next linked list element here
-    // because it makes it easier to structure the code.
-    // If we get to the end of the function and haven't
-    // put any data into it, we'll free it.
     while( !json_object_iter_equal(&it, &itEnd) )
     {
        hasValues = 0;
@@ -683,7 +645,7 @@ makeEventsFromMessage(smsg_t *msg, instanceData *cfg)
     return list;
 }
 
-static void copyField(eventlist_t *src, riemann_event_t *event, riemann_event_field_t field)
+static void copyStringField(eventlist_t *src, riemann_event_t *event, riemann_event_field_t field)
 {
     if( NULL != src->fields[field] )
      {
@@ -733,10 +695,10 @@ serializeEvents(eventlist_t *root)
 
     while( current != NULL) {
        events[i] = riemann_event_new();
-       copyField(current, events[i], RIEMANN_EVENT_FIELD_HOST);
-       copyField(current, events[i], RIEMANN_EVENT_FIELD_SERVICE);
-       copyField(current, events[i], RIEMANN_EVENT_FIELD_STATE);
-       copyField(current, events[i], RIEMANN_EVENT_FIELD_DESCRIPTION);
+       copyStringField(current, events[i], RIEMANN_EVENT_FIELD_HOST);
+       copyStringField(current, events[i], RIEMANN_EVENT_FIELD_SERVICE);
+       copyStringField(current, events[i], RIEMANN_EVENT_FIELD_STATE);
+       copyStringField(current, events[i], RIEMANN_EVENT_FIELD_DESCRIPTION);
        copyDoubleField(current, events[i], RIEMANN_EVENT_FIELD_METRIC_D);
        copyFloatField(current, events[i], RIEMANN_EVENT_FIELD_TTL);
        copyIntField(current, events[i], RIEMANN_EVENT_FIELD_METRIC_S64);
@@ -882,19 +844,15 @@ CODESTARTnewActInst
 			pData->propSubtree = getPropertyDescriptor((uchar*)es_str2cstr(pvals[i].val.d.estr, NULL));
 		} else if (!strcmp(actpblk.descr[i].name, "mode")) {
             pData->mode = strcmp ("single", es_str2cstr(pvals[i].val.d.estr, NULL));
-            dbgprintf("MODE = %d (%s)", pData->mode, es_str2cstr(pvals[i].val.d.estr, NULL));
    		} else if (!strcmp(actpblk.descr[i].name, "prefix")) {
             pData->prefix = es_str2cstr(pvals[i].val.d.estr, NULL);
             pData->prefixLen = strlen(pData->prefix);
-            dbgprintf("MODE = %d (%s)", pData->mode, es_str2cstr(pvals[i].val.d.estr, NULL));
         }
  }
     pData->propHost = getPropertyDescriptor(pData->host);
     pData->propService = getPropertyDescriptor(pData->service);
     pData->propMetric = getPropertyDescriptor(pData->metric);
-    dbgprintf("1\n");
     pData->propDescription = getPropertyDescriptor(pData->description);
-    dbgprintf("2\n");
     pData->propTime = getPropertyDescriptor(pData->time);
 	
 	CODE_STD_STRING_REQUESTnewActInst(1);
