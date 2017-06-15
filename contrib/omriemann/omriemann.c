@@ -336,10 +336,18 @@ setMetricFromConfig(eventState* state, smsg_t *msg, instanceData *cfg)
 static void 
 setFieldsFromConfig(eventState *state, smsg_t *msg, instanceData *cfg)
 {
-    setFieldFromConfig(state, msg, RIEMANN_EVENT_FIELD_HOST, cfg->host, cfg->propHost);
-    setFieldFromConfig(state, msg, RIEMANN_EVENT_FIELD_SERVICE, cfg->service, cfg->propService);
-    setFieldFromConfig(state, msg, RIEMANN_EVENT_FIELD_DESCRIPTION, cfg->description, cfg->propDescription);
-    setMetricFromConfig(state, msg, cfg);
+    if(!state->hasHost) {
+        setFieldFromConfig(state, msg, RIEMANN_EVENT_FIELD_HOST, cfg->host, cfg->propHost);
+    }
+    if(!state->hasService) {
+            setFieldFromConfig(state, msg, RIEMANN_EVENT_FIELD_SERVICE, cfg->service, cfg->propService);
+    }
+    if(!state->hasDescription) {
+            setFieldFromConfig(state, msg, RIEMANN_EVENT_FIELD_DESCRIPTION, cfg->description, cfg->propDescription);
+    }
+    if(!state->hasMetric) {
+        setMetricFromConfig(state, msg, cfg);
+    }
 }
 
 
@@ -355,6 +363,10 @@ setServiceName(eventState* state, const char* prefix, size_t prefixLen, const ch
     
     int offset = 0;
     size_t metricNameLen = 0;
+
+    if(state->hasService) {
+        return;
+    }
 
     if (instanceNameLen == 0 && prefixLen == 0) {
        riemann_event_set(state->event, RIEMANN_EVENT_FIELD_SERVICE, metricName, RIEMANN_EVENT_FIELD_NONE);
@@ -380,6 +392,7 @@ setServiceName(eventState* state, const char* prefix, size_t prefixLen, const ch
                 strcpy(serviceName + offset, metricName);
         }
        riemann_event_set(state->event, RIEMANN_EVENT_FIELD_SERVICE, serviceName, RIEMANN_EVENT_FIELD_NONE);
+       dbgprintf("Got service %s\n", serviceName);
        state->hasService = 1;
     } 
 }
@@ -399,12 +412,14 @@ static int buildSingleEvent(instanceData *cfg, eventState *state, json_object *r
     it = json_object_iter_begin(root);
     itEnd = json_object_iter_end(root);
 
+
     while( !json_object_iter_equal(&it, &itEnd) )
     {
        val = json_object_iter_peek_value(&it);
        type = json_object_get_type(val);
        name = json_object_iter_peek_name(&it);
 
+       dbgprintf("Handling %s\n", name);
        if(strcmp(name, "service") == 0 && type == json_type_string) {
             setServiceName(state, cfg->prefix, cfg->prefixLen, NULL, 0, json_object_get_string(val));
             hasValues = 1;
@@ -473,6 +488,7 @@ static int buildSingleEvent(instanceData *cfg, eventState *state, json_object *r
         free(val);
     }
 
+    dbgprintf("Done!\n");
     return hasValues;
 }
 
@@ -510,7 +526,7 @@ makeEventsFromMessage(smsg_t *msg, riemann_message_t *riemann_msg, instanceData 
         name = (char *)readConfigValue(msg, cfg->service, cfg->propService, &mustFree); 
         setServiceName(state, cfg->prefix, cfg->prefixLen, instanceName, instanceNameLen, name);
         setFieldsFromConfig(state, msg, cfg);
-        riemann_message_set_events(riemann_msg, event);
+        riemann_message_set_events(riemann_msg, event, NULL);
         free(state);
         if(mustFree) { free(name); }
         return 1;
@@ -525,8 +541,7 @@ makeEventsFromMessage(smsg_t *msg, riemann_message_t *riemann_msg, instanceData 
         name = (char *)readConfigValue(msg, cfg->service, cfg->propService, &mustFree); 
         setServiceName(state, cfg->prefix, cfg->prefixLen, instanceName, instanceNameLen, name);
         setFieldsFromConfig(state, msg, cfg);
-        riemann_message_set_events(riemann_msg, event);
-        free(state);
+        riemann_message_set_events(riemann_msg, event, NULL);
         if(mustFree) { free(name); }
         return 1;
     }
@@ -538,7 +553,10 @@ makeEventsFromMessage(smsg_t *msg, riemann_message_t *riemann_msg, instanceData 
     {
         if(buildSingleEvent(cfg, state, json)) 
         {
-          riemann_message_set_events(riemann_msg, event);
+          dbgprintf("Setting event\n");
+          setFieldsFromConfig(state, msg, cfg);
+          riemann_message_set_events(riemann_msg, event, NULL);
+          dbgprintf("Done!\n");
           hasEvents = 1;
         } 
         else {
@@ -628,11 +646,15 @@ rsRetVal enqueueRiemannMetric(smsg_t *pMsg, wrkrInstanceData_t *pWrkrData) {
     hasEvents = makeEventsFromMessage(pMsg, riemannMessage, cfg);
     if( !hasEvents)
     {
+            dbgprintf("ABorting\n");
        ABORT_FINALIZE(RS_RET_OK);
     }
 
+            dbgprintf("Opening connection\n");
     CHKiRet(ensureRiemannConnectionIsOpen(pWrkrData));
+            dbgprintf("Sending message\n");
     riemann_client_send_message_oneshot(pWrkrData->client, riemannMessage);
+    dbgprintf("Done!");
     finalize_it:
       RETiRet;    
 }
