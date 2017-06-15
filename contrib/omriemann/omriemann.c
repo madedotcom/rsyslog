@@ -39,11 +39,11 @@ typedef struct _instanceData {
   msgPropDescr_t *propHost;
   msgPropDescr_t *propTime;
   msgPropDescr_t *propService;
-  msgPropDescr_t *propMetric; 
-  msgPropDescr_t *propDescription; 
+  msgPropDescr_t *propMetric;
+  msgPropDescr_t *propDescription;
   msgPropDescr_t *propSubtree;
 
-  char *prefix; 
+  char *prefix;
   int prefixLen;
 
 } instanceData;
@@ -74,8 +74,8 @@ eventStateNew(riemann_event_t *event){
 }
 
 typedef struct wrkrInstanceData {
-	instanceData *pData; 
-	riemann_client_t *client; 
+    instanceData *pData;
+    riemann_client_t *client;
   int count;
 } wrkrInstanceData_t;
 
@@ -96,9 +96,9 @@ static struct cnfparamdescr actpdescr[] = {
 };
 
 static struct cnfparamblk actpblk = {
-	CNFPARAMBLK_VERSION,
-	sizeof(actpdescr)/sizeof(struct cnfparamdescr),
-	actpdescr
+    CNFPARAMBLK_VERSION,
+    sizeof(actpdescr)/sizeof(struct cnfparamdescr),
+    actpdescr
 };
 
 static void closeRiemannClient(wrkrInstanceData_t *pWrkrData)
@@ -115,24 +115,24 @@ ENDcreateInstance
 
 BEGINcreateWrkrInstance
 CODESTARTcreateWrkrInstance
-	pWrkrData->client = NULL; /* Connect later */
+    pWrkrData->client = NULL; /* Connect later */
 ENDcreateWrkrInstance
 
 BEGINfreeInstance
 CODESTARTfreeInstance
-	if (pData->server != NULL) {
-		free(pData->server);
-	}
+    if (pData->server != NULL) {
+        free(pData->server);
+    }
 ENDfreeInstance
 
 BEGINfreeWrkrInstance
 CODESTARTfreeWrkrInstance
-	closeRiemannClient(pWrkrData);
+    closeRiemannClient(pWrkrData);
 ENDfreeWrkrInstance
 
 BEGINdbgPrintInstInfo
 CODESTARTdbgPrintInstInfo
-	/* nothing special here */
+    /* nothing special here */
 ENDdbgPrintInstInfo
 
 
@@ -152,7 +152,7 @@ rsRetVal ensureRiemannConnectionIsOpen(wrkrInstanceData_t *pWrkrData)
     dbgprintf("omriemann: can't connect to Riemann at %s %d", server, 5555);
     ABORT_FINALIZE(RS_RET_SUSPENDED);
   }
-    
+
   finalize_it:
     RETiRet;
 }
@@ -176,9 +176,9 @@ rsRetVal ensureRiemannConnectionIsOpen(wrkrInstanceData_t *pWrkrData)
  * * */
 
 
-static const uchar * 
+static const uchar *
 readConfigValue (smsg_t *msg, uchar *cfgValue, msgPropDescr_t *resolvedProperty, unsigned short *mustFree) {
-        uchar *propValue; 
+        uchar *propValue;
         rs_size_t propLen;
         propValue = NULL;
 
@@ -188,7 +188,7 @@ readConfigValue (smsg_t *msg, uchar *cfgValue, msgPropDescr_t *resolvedProperty,
            propValue = MsgGetProp(msg, NULL, resolvedProperty, &propLen, mustFree, NULL);
            if( NULL != propValue)
               return propValue;
-        } 
+        }
         if (*mustFree) {
            free(propValue);
            *mustFree = 0;
@@ -196,11 +196,11 @@ readConfigValue (smsg_t *msg, uchar *cfgValue, msgPropDescr_t *resolvedProperty,
         return cfgValue;
 }
 
-static void 
+static void
 setFieldFromConfig(eventState * state, smsg_t *msg,
-                riemann_event_field_t field, uchar *cfgValue, 
+                riemann_event_field_t field, uchar *cfgValue,
                 msgPropDescr_t *resolvedProperty) {
-         
+
         unsigned short mustFree = 0;
         const uchar* value = readConfigValue(msg, cfgValue, resolvedProperty, &mustFree);
         riemann_event_set(state->event, field, value, RIEMANN_EVENT_FIELD_NONE);
@@ -252,7 +252,7 @@ setMetricFromJsonValue(struct json_object *json, eventState *state)
 
         if (NULL == json)
            return;
-        
+
         type = json_object_get_type(json);
 
         switch(type) {
@@ -282,7 +282,7 @@ static void
 setMetricFromConfig(eventState* state, smsg_t *msg, instanceData *cfg)
 {
     // If the metric has already been set, then we won't override it.
-    if (state->hasMetric) {    
+    if (state->hasMetric) {
        return;
     }
 
@@ -306,7 +306,7 @@ setMetricFromConfig(eventState* state, smsg_t *msg, instanceData *cfg)
           case PROP_CEE:
           case PROP_CEE_ALL_JSON:
           case PROP_CEE_ALL_JSON_PLAIN:
-            
+
             localRet = msgGetJSONPropJSON(msg, cfg->propMetric, &json);
             if (localRet == RS_RET_OK)
               setMetricFromJsonValue(json, state);
@@ -315,7 +315,7 @@ setMetricFromConfig(eventState* state, smsg_t *msg, instanceData *cfg)
           default:
              value = MsgGetProp(msg, NULL, cfg->propMetric, &valueLen, &mustFree, NULL);
              setMetricFromString((char *)value, state);
-             if(mustFree) 
+             if(mustFree)
                free(value);
         }
     }
@@ -333,7 +333,7 @@ setMetricFromConfig(eventState* state, smsg_t *msg, instanceData *cfg)
  * resulting message is vaguely sensible.
  */
 
-static void 
+static void
 setFieldsFromConfig(eventState *state, smsg_t *msg, instanceData *cfg)
 {
     if(!state->hasHost) {
@@ -357,10 +357,10 @@ setFieldsFromConfig(eventState *state, smsg_t *msg, instanceData *cfg)
  *
  * This function also handles prefixing service names, eg. action(type="omriemann" prefix="foo") will yield metrics with service names
  * `foo/$programname`
- */ 
-static void 
+ */
+static void
 setServiceName(eventState* state, const char* prefix, size_t prefixLen, const char* instanceName, size_t instanceNameLen, const char* metricName) {
-    
+
     int offset = 0;
     size_t metricNameLen = 0;
 
@@ -385,7 +385,7 @@ setServiceName(eventState* state, const char* prefix, size_t prefixLen, const ch
         }
         if (instanceNameLen > 0) {
             strcpy(serviceName + offset, instanceName);
-            serviceName[offset + instanceNameLen] = '/'; 
+            serviceName[offset + instanceNameLen] = '/';
             offset += (1 + instanceNameLen);
         }
         if (metricNameLen > 0) {
@@ -394,7 +394,7 @@ setServiceName(eventState* state, const char* prefix, size_t prefixLen, const ch
        riemann_event_set(state->event, RIEMANN_EVENT_FIELD_SERVICE, serviceName, RIEMANN_EVENT_FIELD_NONE);
        dbgprintf("Got service %s\n", serviceName);
        state->hasService = 1;
-    } 
+    }
 }
 
 static int buildSingleEvent(instanceData *cfg, eventState *state, json_object *root)
@@ -461,8 +461,8 @@ static int buildSingleEvent(instanceData *cfg, eventState *state, json_object *r
                 tag = json_object_array_get_idx(val, i);
                 type = json_object_get_type(tag);
                 if (type == json_type_string) {
-                   riemann_event_tag_add(state->event, json_object_get_string(tag)); 
-                } 
+                   riemann_event_tag_add(state->event, json_object_get_string(tag));
+                }
             }
        }
        else if (!strcmp(name, "attributes") && type == json_type_object) {
@@ -495,7 +495,7 @@ static int buildSingleEvent(instanceData *cfg, eventState *state, json_object *r
 
 /* This is the function responsible for mapping a message to an eventlist_t. */
 static unsigned short
-makeEventsFromMessage(smsg_t *msg, riemann_message_t *riemann_msg, instanceData *cfg) 
+makeEventsFromMessage(smsg_t *msg, riemann_message_t *riemann_msg, instanceData *cfg)
 {
     eventState *state;
     struct json_object *json = NULL;
@@ -523,7 +523,7 @@ makeEventsFromMessage(smsg_t *msg, riemann_message_t *riemann_msg, instanceData 
     if (NULL == cfg->propSubtree)
     {
         unsigned short mustFree = 0;
-        name = (char *)readConfigValue(msg, cfg->service, cfg->propService, &mustFree); 
+        name = (char *)readConfigValue(msg, cfg->service, cfg->propService, &mustFree);
         setServiceName(state, cfg->prefix, cfg->prefixLen, instanceName, instanceNameLen, name);
         setFieldsFromConfig(state, msg, cfg);
         riemann_message_set_events(riemann_msg, event, NULL);
@@ -535,10 +535,10 @@ makeEventsFromMessage(smsg_t *msg, riemann_message_t *riemann_msg, instanceData 
     // If we have a subtree configured, but we're unable to parse it
     // for whatever reason, we'll fall back to just sending default fields.
     err = msgGetJSONPropJSON(msg, cfg->propSubtree, &json);
-    if (NULL == json || err != RS_RET_OK) 
+    if (NULL == json || err != RS_RET_OK)
     {
         unsigned short mustFree = 0;
-        name = (char *)readConfigValue(msg, cfg->service, cfg->propService, &mustFree); 
+        name = (char *)readConfigValue(msg, cfg->service, cfg->propService, &mustFree);
         setServiceName(state, cfg->prefix, cfg->prefixLen, instanceName, instanceNameLen, name);
         setFieldsFromConfig(state, msg, cfg);
         riemann_message_set_events(riemann_msg, event, NULL);
@@ -546,19 +546,19 @@ makeEventsFromMessage(smsg_t *msg, riemann_message_t *riemann_msg, instanceData 
         return 1;
     }
 
-    
+
     // If we're in single-event mode then try to pase the subtree as
     // a single event.
     if(cfg->mode == 0)
     {
-        if(buildSingleEvent(cfg, state, json)) 
+        if(buildSingleEvent(cfg, state, json))
         {
           dbgprintf("Setting event\n");
           setFieldsFromConfig(state, msg, cfg);
           riemann_message_set_events(riemann_msg, event, NULL);
           dbgprintf("Done!\n");
           hasEvents = 1;
-        } 
+        }
         else {
           riemann_event_free(event);
           hasEvents = 0;
@@ -591,8 +591,8 @@ makeEventsFromMessage(smsg_t *msg, riemann_message_t *riemann_msg, instanceData 
        val = json_object_iter_peek_value(&it);
        type = json_object_get_type(val);
        name = json_object_iter_peek_name(&it);
-  
-       if(strcmp(name, "values") == 0 && type == json_type_object) 
+
+       if(strcmp(name, "values") == 0 && type == json_type_object)
        {
           valuesIt = json_object_iter_begin(val);
           valuesItEnd = json_object_iter_end(val);
@@ -640,7 +640,7 @@ rsRetVal enqueueRiemannMetric(smsg_t *pMsg, wrkrInstanceData_t *pWrkrData) {
     DEFiRet;
     instanceData *cfg;
     riemann_message_t *riemannMessage = riemann_message_new();
-    unsigned short hasEvents; 
+    unsigned short hasEvents;
     cfg = pWrkrData->pData;
 
     hasEvents = makeEventsFromMessage(pMsg, riemannMessage, cfg);
@@ -656,15 +656,15 @@ rsRetVal enqueueRiemannMetric(smsg_t *pMsg, wrkrInstanceData_t *pWrkrData) {
     riemann_client_send_message_oneshot(pWrkrData->client, riemannMessage);
     dbgprintf("Done!");
     finalize_it:
-      RETiRet;    
+      RETiRet;
 }
 
 
 
 BEGINtryResume
 CODESTARTtryResume
-	if(pWrkrData->client == NULL)
-		iRet = ensureRiemannConnectionIsOpen(pWrkrData);
+    if(pWrkrData->client == NULL)
+        iRet = ensureRiemannConnectionIsOpen(pWrkrData);
 ENDtryResume
 
 BEGINdoAction_NoStrings
@@ -674,29 +674,29 @@ CODESTARTdoAction
   msg = (smsg_t**)pMsgData;
   CHKiRet(enqueueRiemannMetric(*msg, pWrkrData));
   finalize_it:
-	pthread_mutex_unlock(&mutDoAct);
+    pthread_mutex_unlock(&mutDoAct);
 ENDdoAction
 
 BEGINisCompatibleWithFeature
 CODESTARTisCompatibleWithFeature
-	if(eFeat == sFEATURERepeatedMsgReduction)
-		iRet = RS_RET_OK;
+    if(eFeat == sFEATURERepeatedMsgReduction)
+        iRet = RS_RET_OK;
 ENDisCompatibleWithFeature
 
 static msgPropDescr_t *
 getPropertyDescriptor(uchar *name)
 {
-    
+
     propid_t prop_id;
     msgPropDescr_t *prop = NULL;
 
     if (name == NULL) {
         return NULL;
     }
-    
+
     propNameToID(name, &prop_id);
 
-    if (prop_id != PROP_INVALID) 
+    if (prop_id != PROP_INVALID)
     {
        prop = calloc(1, sizeof(msgPropDescr_t));
        msgPropDescrFill(prop, name, strlen((const char *)name));
@@ -708,8 +708,8 @@ getPropertyDescriptor(uchar *name)
 static void
 setInstParamDefaults(instanceData *pData)
 {
-	pData->server = (uchar*) "localhost";
-	pData->port = 5555;
+    pData->server = (uchar*) "localhost";
+    pData->port = 5555;
     pData->host = (uchar*) "hostname";
     pData->time = (uchar*) "timestamp";
     pData->service = (uchar*) "programname";
@@ -719,40 +719,40 @@ setInstParamDefaults(instanceData *pData)
 }
 
 BEGINnewActInst
-	struct cnfparamvals *pvals;
+    struct cnfparamvals *pvals;
     int i;
 
 CODESTARTnewActInst
-	if((pvals = nvlstGetParams(lst, &actpblk, NULL)) == NULL)
-		ABORT_FINALIZE(RS_RET_MISSING_CNFPARAMS);
+    if((pvals = nvlstGetParams(lst, &actpblk, NULL)) == NULL)
+        ABORT_FINALIZE(RS_RET_MISSING_CNFPARAMS);
 
-	CHKiRet(createInstance(&pData));
-	setInstParamDefaults(pData);
+    CHKiRet(createInstance(&pData));
+    setInstParamDefaults(pData);
 
-	for(i = 0 ; i < actpblk.nParams ; ++i) {
-		if(!pvals[i].bUsed)
-			continue;
-		if(!strcmp(actpblk.descr[i].name, "server")) {
-			pData->server = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
-		} else if(!strcmp(actpblk.descr[i].name, "serverport")) {
-			pData->port = (int) pvals[i].val.d.n;
-		} else if(!strcmp(actpblk.descr[i].name, "service")) {
-			pData->service = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
-		} else if(!strcmp(actpblk.descr[i].name, "host")) {
-			pData->host = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
-		} else if(!strcmp(actpblk.descr[i].name, "time")) {
-			pData->time = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
-		} else if(!strcmp(actpblk.descr[i].name, "includeall")) {
-			pData->includeall = pvals[i].val.d.n;
-		} else if(!strcmp(actpblk.descr[i].name, "metric")) {
-			pData->metric = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
-   		} else if(!strcmp(actpblk.descr[i].name, "description")) {
-			pData->description = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
-   		} else if(!strcmp(actpblk.descr[i].name, "subtree")) {
-			pData->propSubtree = getPropertyDescriptor((uchar*)es_str2cstr(pvals[i].val.d.estr, NULL));
-		} else if (!strcmp(actpblk.descr[i].name, "mode")) {
+    for(i = 0 ; i < actpblk.nParams ; ++i) {
+        if(!pvals[i].bUsed)
+            continue;
+        if(!strcmp(actpblk.descr[i].name, "server")) {
+            pData->server = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
+        } else if(!strcmp(actpblk.descr[i].name, "serverport")) {
+            pData->port = (int) pvals[i].val.d.n;
+        } else if(!strcmp(actpblk.descr[i].name, "service")) {
+            pData->service = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
+        } else if(!strcmp(actpblk.descr[i].name, "host")) {
+            pData->host = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
+        } else if(!strcmp(actpblk.descr[i].name, "time")) {
+            pData->time = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
+        } else if(!strcmp(actpblk.descr[i].name, "includeall")) {
+            pData->includeall = pvals[i].val.d.n;
+        } else if(!strcmp(actpblk.descr[i].name, "metric")) {
+            pData->metric = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
+        } else if(!strcmp(actpblk.descr[i].name, "description")) {
+            pData->description = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
+        } else if(!strcmp(actpblk.descr[i].name, "subtree")) {
+            pData->propSubtree = getPropertyDescriptor((uchar*)es_str2cstr(pvals[i].val.d.estr, NULL));
+        } else if (!strcmp(actpblk.descr[i].name, "mode")) {
             pData->mode = strcmp ("single", es_str2cstr(pvals[i].val.d.estr, NULL));
-   		} else if (!strcmp(actpblk.descr[i].name, "prefix")) {
+        } else if (!strcmp(actpblk.descr[i].name, "prefix")) {
             pData->prefix = es_str2cstr(pvals[i].val.d.estr, NULL);
             pData->prefixLen = strlen(pData->prefix);
         }
@@ -762,13 +762,13 @@ CODESTARTnewActInst
     pData->propMetric = getPropertyDescriptor(pData->metric);
     pData->propDescription = getPropertyDescriptor(pData->description);
     pData->propTime = getPropertyDescriptor(pData->time);
-	
-	CODE_STD_STRING_REQUESTnewActInst(1);
+
+    CODE_STD_STRING_REQUESTnewActInst(1);
     CHKiRet(OMSRsetEntry(*ppOMSR, 0, NULL, OMSR_TPL_AS_MSG));
 
 
 CODE_STD_FINALIZERnewActInst
-	cnfparamvalsDestruct(pvals, &actpblk);
+    cnfparamvalsDestruct(pvals, &actpblk);
 ENDnewActInst
 
 BEGINparseSelectorAct
@@ -792,12 +792,12 @@ ENDqueryEtryPt
 
 BEGINmodInit()
 CODESTARTmodInit
-	*ipIFVersProvided = CURR_MOD_IF_VERSION; /* only supports rsyslog 6 configs */
+    *ipIFVersProvided = CURR_MOD_IF_VERSION; /* only supports rsyslog 6 configs */
 CODEmodInit_QueryRegCFSLineHdlr
-	CHKiRet(objUse(errmsg, CORE_COMPONENT));
-	INITChkCoreFeature(bCoreSupportsBatching, CORE_FEATURE_BATCHING);
-	if (!bCoreSupportsBatching) {
-		errmsg.LogError(0, NO_ERRCODE, "omhiredis: rsyslog core does not support batching - abort");
-		ABORT_FINALIZE(RS_RET_ERR);
-	}
+    CHKiRet(objUse(errmsg, CORE_COMPONENT));
+    INITChkCoreFeature(bCoreSupportsBatching, CORE_FEATURE_BATCHING);
+    if (!bCoreSupportsBatching) {
+        errmsg.LogError(0, NO_ERRCODE, "omhiredis: rsyslog core does not support batching - abort");
+        ABORT_FINALIZE(RS_RET_ERR);
+    }
 ENDmodInit
