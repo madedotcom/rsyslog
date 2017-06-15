@@ -16,12 +16,6 @@ MODULE_CNFNAME("omriemann")
 DEF_OMOD_STATIC_DATA
 DEFobjCurrIf(errmsg)
 
-#define OMRIEMANN_FIELD_HOST 0
-#define OMRIEMANN_FIELD_SERVICE 1
-#define OMRIEMANN_FIELD_METRIC 2
-#define FIELD_COUNT 13
-#define MAX_TAG_COUNT 16
-
 typedef struct _instanceData {
   uchar *server;
   int port;
@@ -392,7 +386,6 @@ setServiceName(eventState* state, const char* prefix, size_t prefixLen, const ch
                 strcpy(serviceName + offset, metricName);
         }
        riemann_event_set(state->event, RIEMANN_EVENT_FIELD_SERVICE, serviceName, RIEMANN_EVENT_FIELD_NONE);
-       dbgprintf("Got service %s\n", serviceName);
        state->hasService = 1;
     }
 }
@@ -419,7 +412,6 @@ static int buildSingleEvent(instanceData *cfg, eventState *state, json_object *r
        type = json_object_get_type(val);
        name = json_object_iter_peek_name(&it);
 
-       dbgprintf("Handling %s\n", name);
        if(strcmp(name, "service") == 0 && type == json_type_string) {
             setServiceName(state, cfg->prefix, cfg->prefixLen, NULL, 0, json_object_get_string(val));
             hasValues = 1;
@@ -488,7 +480,6 @@ static int buildSingleEvent(instanceData *cfg, eventState *state, json_object *r
         free(val);
     }
 
-    dbgprintf("Done!\n");
     return hasValues;
 }
 
@@ -553,10 +544,8 @@ makeEventsFromMessage(smsg_t *msg, riemann_message_t *riemann_msg, instanceData 
     {
         if(buildSingleEvent(cfg, state, json))
         {
-          dbgprintf("Setting event\n");
           setFieldsFromConfig(state, msg, cfg);
           riemann_message_set_events(riemann_msg, event, NULL);
-          dbgprintf("Done!\n");
           hasEvents = 1;
         }
         else {
@@ -646,15 +635,11 @@ rsRetVal enqueueRiemannMetric(smsg_t *pMsg, wrkrInstanceData_t *pWrkrData) {
     hasEvents = makeEventsFromMessage(pMsg, riemannMessage, cfg);
     if( !hasEvents)
     {
-            dbgprintf("ABorting\n");
        ABORT_FINALIZE(RS_RET_OK);
     }
 
-            dbgprintf("Opening connection\n");
     CHKiRet(ensureRiemannConnectionIsOpen(pWrkrData));
-            dbgprintf("Sending message\n");
     riemann_client_send_message_oneshot(pWrkrData->client, riemannMessage);
-    dbgprintf("Done!");
     finalize_it:
       RETiRet;
 }
